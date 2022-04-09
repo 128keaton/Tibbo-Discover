@@ -1,6 +1,6 @@
 {
   "name": "tibbo-discover",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "",
   "main": "dist/tibbo-discover.js",
   "types": "dist/tibbo-discover.d.ts",
@@ -11,7 +11,7 @@
     "test": "jest --config=jest.config.js --coverage"
   },
   "bin": {
-    "tibbo-discover": "./dist/tibbo.js"
+    "tibbo-discover": "./dist/tibbo-discover.js"
   },
   "author": "Keaton Burleson",
   "license": "MIT",
