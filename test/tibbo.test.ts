@@ -1,11 +1,7 @@
-import util from "util";
 
-import {exec as exec0} from "child_process";
+import {lastValueFrom, Observable} from "rxjs";
 import {TibboDiscover} from "../dist";
-import {lastValueFrom, Observable, take} from "rxjs";
 
-
-const exec = util.promisify(exec0);
 
 test('#testInstances', () => {
     const instance = new TibboDiscover();
