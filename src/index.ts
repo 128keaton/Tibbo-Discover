@@ -56,6 +56,10 @@ export class TibboDiscover {
             this._currentClient = createSocket('udp4');
         });
 
+        if (this.$devices.value === null) {
+            this.$devices.next([]);
+        }
+
         this.$devices.complete();
         this._isBound = false;
     }
