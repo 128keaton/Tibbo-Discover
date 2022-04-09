@@ -1,5 +1,5 @@
 import {createSocket, Socket} from "dgram";
-import {BehaviorSubject, filter, Observable} from "rxjs";
+import {BehaviorSubject, filter, firstValueFrom, Observable} from "rxjs";
 
 
 const IP = require("ip");
@@ -8,10 +8,12 @@ const EMPTY_RESPONSE_LENGTH = 26;
 const BROADCAST_PORT = 65535;
 
 export interface TibboDevice {
-    boardType: string
-    currentApp: string
-    data: any
-    address: string
+    boardType: string;
+    currentApp: string;
+    data: any;
+    address: string;
+    id: string;
+    macAddress: string;
 }
 
 
@@ -44,6 +46,8 @@ export class TibboDiscover {
     public scan(timeout = 5000) {
         this._scanTimeout = timeout;
         this.setupClient(this._currentClient)?.then(() => {
+            this.sendDiscoverMessage();
+
             if (timeout > 0) {
                 setTimeout(() => {
                     this.stop();
@@ -69,6 +73,20 @@ export class TibboDiscover {
 
         this.$devices.complete();
         this._isBound = false;
+    }
+
+    public async reboot(ipAddress: string) {
+        this.scan();
+
+        return firstValueFrom(this.devices).then(devices => {
+            const device = (devices || [])?.find(d => d.address === ipAddress);
+
+            if (!device) {
+                throw new Error('Could not find device');
+            }
+
+            this.send(`_${device.id}E`);
+        })
     }
 
     private send(message: string) {
@@ -97,10 +115,10 @@ export class TibboDiscover {
         if (message.length === EMPTY_RESPONSE_LENGTH) {
             this.sendQueryMessage(segment);
         } else {
-            const deviceInfo = TibboDiscover.parseDeviceInfo(message, address, info);
+            const deviceInfo = TibboDiscover.parseDeviceInfo(message, address, macAddress, info);
 
-            if (!this._devices.hasOwnProperty(macAddress)) {
-                this._devices[macAddress] = deviceInfo;
+            if (!this._devices.hasOwnProperty(deviceInfo.id)) {
+                this._devices[deviceInfo.id] = deviceInfo;
                 this.emitUpdate();
             }
         }
@@ -115,45 +133,52 @@ export class TibboDiscover {
     }
 
     private setupClient(client?: Socket) {
-        if (this._isBound) {
-            return;
-        }
-
-        if (!client) {
-            throw new Error('dgram client not available');
-        }
-
-        client.on('message', (buffer: Buffer, info: { address: string }) => {
-            const message = buffer.toString();
-            if (!!message) {
-                const matches = message.match(MAC_REGEX);
-
-                if (!!matches) {
-                    this.processMessage(message, info);
-                }
+        return new Promise((resolve, reject) => {
+            if (this._isBound) {
+                resolve(true);
+                return;
             }
-        });
 
-        client.once('listening', () => {
-            this._isBound = true;
+            if (!client) {
+                reject('dgram client not available');
+                return;
+            }
 
-            client.setBroadcast(true);
-            this.sendDiscoverMessage();
-        });
+            client.on('message', (buffer: Buffer, info: { address: string }) => {
+                const message = buffer.toString();
+                if (!!message) {
+                    const matches = message.match(MAC_REGEX);
 
-        return new Promise(resolve => {
-            client.bind(() => resolve(true));
+                    if (!!matches) {
+                        this.processMessage(message, info);
+                    }
+                }
+            });
+
+            client.once('listening', () => {
+                this._isBound = true;
+
+                client.setBroadcast(true);
+                resolve(true);
+            });
+
+            client.bind();
         })
     }
 
-    private static parseDeviceInfo(message: string, macAddress: string, info: { address: string }): TibboDevice {
-        const [boardType, data, currentApp] = message.replace(macAddress, '').split('/');
+    private static parseDeviceInfo(message: string,
+                                   rawAddress: string,
+                                   macAddress: string,
+                                   info: { address: string }): TibboDevice {
+        const [boardType, data, currentApp] = message.replace(rawAddress, '').split('/');
 
         return {
             boardType: boardType.replace(/[<>]/g, ''),
             data,
             currentApp,
-            address: info.address
+            address: info.address,
+            id: rawAddress.slice(0, rawAddress.length - 1),
+            macAddress
         }
     }
 
@@ -167,14 +192,27 @@ export class TibboDiscover {
 if (require.main == module) {
     const instance = new TibboDiscover();
 
-    let timeout: number | undefined = Number(process.argv[2]);
+    if (process.argv[2] === 'reboot') {
+        const target: string = process.argv[3];
 
-    if (isNaN(timeout) || !timeout) {
-        timeout = undefined;
+        if (!target) {
+            throw new Error('No target specified');
+        }
+
+        instance.reboot(target).then(() => {
+            console.log(target, 'rebooted');
+        })
+
+    } else {
+        let timeout: number | undefined = Number(process.argv[2]);
+
+        if (isNaN(timeout) || !timeout) {
+            timeout = undefined;
+        }
+
+        instance.scan(timeout);
+        instance.devices.subscribe(devices => {
+            console.log(JSON.stringify({devices}))
+        });
     }
-
-    instance.scan(timeout);
-    instance.devices.subscribe(devices => {
-        console.log(JSON.stringify({devices}))
-    });
 }
