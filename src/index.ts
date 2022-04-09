@@ -2,10 +2,10 @@ import {createSocket, Socket} from "dgram";
 import {BehaviorSubject, filter, Observable} from "rxjs";
 
 
+const IP = require("ip");
 const MAC_REGEX = /\[\d..\.\d..\.\d..\.\d..\.\d..\.\d..][CRA]/;
 const EMPTY_RESPONSE_LENGTH = 26;
 const BROADCAST_PORT = 65535;
-const BROADCAST_ADDR = '10.0.1.255';
 
 export interface TibboDevice {
     boardType: string
@@ -24,6 +24,7 @@ export class TibboDiscover {
     }
 
     private $devices: BehaviorSubject<TibboDevice[] | null> = new BehaviorSubject<TibboDevice[] | null>(null);
+    private _broadcastAddress = '255.255.255.255';
     private _isBound = false;
     private _scanTimeout: number = 5000;
     private _devices: { [key: string]: TibboDevice } = {};
@@ -32,6 +33,12 @@ export class TibboDiscover {
     constructor(private defaultTimeout: number = 5000) {
         this._scanTimeout = defaultTimeout;
         this._currentClient = createSocket('udp4');
+
+        const hostAddress: string[] = `${IP.address()}`.split('.');
+
+        hostAddress[3] = '255';
+
+        this._broadcastAddress = hostAddress.join('.');
     }
 
     public scan(timeout = 5000) {
@@ -71,7 +78,7 @@ export class TibboDiscover {
             throw new Error('dgram client not available');
         }
 
-        client.send(Buffer.from(message), BROADCAST_PORT, BROADCAST_ADDR);
+        client.send(Buffer.from(message), BROADCAST_PORT, this._broadcastAddress);
     }
 
     private sendDiscoverMessage() {
