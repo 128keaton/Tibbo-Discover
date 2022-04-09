@@ -1,6 +1,7 @@
+#! /usr/bin/env node
+
 import {createSocket, Socket} from "dgram";
 import {BehaviorSubject, filter, firstValueFrom, Observable} from "rxjs";
-
 
 const IP = require("ip");
 const MAC_REGEX = /\[\d..\.\d..\.\d..\.\d..\.\d..\.\d..][CRA]/;

@@ -1,13 +1,13 @@
 {
   "name": "tibbo-discover",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/tibbo-discover.js",
+  "types": "dist/tibbo-discover.d.ts",
   "scripts": {
     "prepublish": "tsc",
     "clean": "rm -rf dist && mkdir dist",
-    "build": "npm run clean && tsc && chmod +x dist/index.js",
+    "build": "npm run clean && tsc && chmod +x dist/tibbo-discover.js",
     "test": "jest --config=jest.config.js --coverage"
   },
   "bin": {

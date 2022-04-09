@@ -3,7 +3,7 @@ module.exports = {
         '^.+\\.tsx?$': 'ts-jest'
     },
     coverageDirectory: 'test/coverage',
-    testRegex: '/test/tibbo.test.ts',
+    testRegex: '/test/tibbo-discover.test.ts',
     testEnvironment: 'node',
     moduleFileExtensions: ['js', 'ts'],
 };
