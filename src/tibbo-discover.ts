@@ -35,59 +35,56 @@ export class TibboDiscover {
 
     constructor(private defaultTimeout: number = 5000) {
         this._scanTimeout = defaultTimeout;
-        this._currentClient = createSocket('udp4');
-
-        const hostAddress: string[] = `${IP.address()}`.split('.');
-
-        hostAddress[3] = '255';
-
-        this._broadcastAddress = hostAddress.join('.');
+        this.generateBroadcastAddress();
     }
 
     public scan(timeout = 5000) {
         this._scanTimeout = timeout;
-        this.setupClient(this._currentClient)?.then(() => {
-            this.sendDiscoverMessage();
 
-            if (timeout > 0) {
-                setTimeout(() => {
-                    this.stop();
-                }, this._scanTimeout);
-            }
-        });
+        return this.setupClient()
+            .then(() => this.sendDiscoverMessage())
+            .then(() => {
+                if (timeout > 0) {
+                    setTimeout(() => this.stop(), this._scanTimeout);
+                }
+            })
     }
 
     public stop() {
-        const client = this._currentClient;
+        return new Promise(resolve => {
 
-        if (!client) {
-            throw new Error('dgram client not available');
-        }
+            if (this.$devices.value === null) {
+                this.$devices.next([]);
+            }
 
-        client.close(() => {
-            this._currentClient = createSocket('udp4');
-        });
+            this.$devices.complete();
+            this._isBound = false;
 
-        if (this.$devices.value === null) {
-            this.$devices.next([]);
-        }
-
-        this.$devices.complete();
-        this._isBound = false;
+            if (this._currentClient) {
+                this._currentClient.close(() => {
+                    this._currentClient = undefined;
+                    resolve(true);
+                });
+            } else {
+                resolve(true);
+            }
+        })
     }
 
-    public async reboot(ipAddress: string) {
-        this.scan();
-
-        return firstValueFrom(this.devices).then(devices => {
-            const device = (devices || [])?.find(d => d.address === ipAddress);
-
+    public reboot(ipAddress: string) {
+        return this.scan(1000).catch(() => {
+            return this.scan(5000);
+        }).then(() => {
+            return firstValueFrom(this.devices)
+        }).then(devices => {
+            return (devices || [])?.find(d => d.address === ipAddress);
+        }).then(device => {
             if (!device) {
                 throw new Error('Could not find device');
             }
 
-            this.send(`_${device.id}E`);
-        })
+            return this.send(`_${device.id}E`);
+        });
     }
 
     private send(message: string) {
@@ -97,11 +94,19 @@ export class TibboDiscover {
             throw new Error('dgram client not available');
         }
 
-        client.send(Buffer.from(message), BROADCAST_PORT, this._broadcastAddress);
+        return new Promise((resolve, reject) => {
+            client.send(Buffer.from(message), BROADCAST_PORT, this._broadcastAddress, (err) => {
+                if (!!err) {
+                    reject(err);
+                } else {
+                    resolve(true);
+                }
+            });
+        })
     }
 
     private sendDiscoverMessage() {
-        this.send("_?");
+        return this.send("_?");
     }
 
     private sendQueryMessage(forClient: string) {
@@ -114,7 +119,7 @@ export class TibboDiscover {
         const macAddress = segment.split('.').map(r => Number(r)).join(':');
 
         if (message.length === EMPTY_RESPONSE_LENGTH) {
-            this.sendQueryMessage(segment);
+            return this.sendQueryMessage(segment);
         } else {
             const deviceInfo = TibboDiscover.parseDeviceInfo(message, address, macAddress, info);
 
@@ -133,38 +138,48 @@ export class TibboDiscover {
         }
     }
 
-    private setupClient(client?: Socket) {
-        return new Promise((resolve, reject) => {
+    private setupClient() {
+        return new Promise((resolve) => {
             if (this._isBound) {
                 resolve(true);
                 return;
             }
 
-            if (!client) {
-                reject('dgram client not available');
-                return;
+            if (this._currentClient === undefined) {
+                this._currentClient = createSocket('udp4');
             }
 
-            client.on('message', (buffer: Buffer, info: { address: string }) => {
+            const actualClient = this._currentClient!;
+
+
+            actualClient.on('message', (buffer: Buffer, info: { address: string }) => {
                 const message = buffer.toString();
                 if (!!message) {
                     const matches = message.match(MAC_REGEX);
 
                     if (!!matches) {
-                        this.processMessage(message, info);
+                        this.processMessage(message, info)?.then();
                     }
                 }
             });
 
-            client.once('listening', () => {
+            actualClient.once('listening', () => {
                 this._isBound = true;
 
-                client.setBroadcast(true);
+                actualClient.setBroadcast(true);
                 resolve(true);
             });
 
-            client.bind();
+            actualClient.bind();
         })
+    }
+
+    private generateBroadcastAddress() {
+        const hostAddress: string[] = `${IP.address()}`.split('.');
+
+        hostAddress[3] = '255';
+
+        this._broadcastAddress = hostAddress.join('.');
     }
 
     private static parseDeviceInfo(message: string,
@@ -200,7 +215,9 @@ if (require.main == module) {
             throw new Error('No target specified');
         }
 
-        instance.reboot(target).then(() => {
+        instance.reboot(target).catch(() => {
+            console.log('Could not find', target);
+        }).then(() => {
             console.log(target, 'rebooted');
         })
 
@@ -211,7 +228,7 @@ if (require.main == module) {
             timeout = undefined;
         }
 
-        instance.scan(timeout);
+        instance.scan(timeout).then();
         instance.devices.subscribe(devices => {
             console.log(JSON.stringify({devices}))
         });
