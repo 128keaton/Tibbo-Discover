@@ -1,4 +1,6 @@
-### Tibbo Discover
+### Tibbo Discover 
+[![Coverage Status](https://coveralls.io/repos/github/128keaton/Tibbo-Discover/badge.svg)](https://coveralls.io/github/128keaton/Tibbo-Discover)
+
 Discover Tibbo devices on the network
 
 ```bash
