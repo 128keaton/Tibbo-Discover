@@ -1,4 +1,3 @@
-import {lastValueFrom, Observable} from "rxjs";
 import {TibboDiscover} from "../dist/tibbo-discover";
 
 
@@ -6,8 +5,8 @@ test('#testInstances', () => {
     const instance = new TibboDiscover();
 
     expect(instance).toBeInstanceOf(TibboDiscover);
-    expect(instance.devices).toBeInstanceOf(Observable);
     expect(instance.stop).toBeInstanceOf(Function);
+    expect(instance.scan).toBeInstanceOf(Function);
 });
 
 test('#testValues', () => {
@@ -15,7 +14,7 @@ test('#testValues', () => {
     const instanceB = new TibboDiscover(6000);
 
     // @ts-ignore
-    expect(instanceA._scanTimeout).toEqual(5000);
+    expect(instanceA._scanTimeout).toEqual(3000);
 
     // @ts-ignore
     expect(instanceB._scanTimeout).toEqual(6000);
@@ -25,9 +24,7 @@ jest.setTimeout(25000);
 test('#checkArray', async () => {
     const instance = new TibboDiscover();
 
-    await instance.scan(1);
-
-    const devices = await lastValueFrom(instance.devices);
+    const devices = await instance.scan(1);
 
     expect(devices).toBeInstanceOf(Array);
 
@@ -78,54 +75,18 @@ test('#checkDoubleBound', async () => {
     expect(instance._isBound).toBe(false);
 });
 
-
+jest.setTimeout(95000);
 test('#reboot', async () => {
-    const instanceA = new TibboDiscover();
-
-    expect.assertions(1);
-
-    try {
-        await instanceA.reboot('0.0.0.0')
-    } catch (e) {
-        return expect(e).toStrictEqual(Error('Could not find device'))
-    }
-
-    const instanceB = new TibboDiscover();
-
-    // @ts-ignore
-    instanceB._currentClient.close();
-
-    // @ts-ignore
-    instanceB._currentClient = undefined;
-
-    expect.assertions(1);
+    const instance = new TibboDiscover(1000);
+    const ipAddress = '0.0.0.0';
 
     try {
-        await instanceB.reboot('0.0.0.0')
+        await instance.reboot(ipAddress)
     } catch (e) {
-        return expect(e).toStrictEqual(Error('Could not find device'))
+        expect(e).toEqual(`Could not find device ${ipAddress}`)
     }
 
-    const instanceC = new TibboDiscover();
-
-    expect.assertions(1);
-
-    // @ts-ignore
-    instanceC.$devices.next([{
-        boardType: 'dummy',
-        currentApp: 'dummy',
-        data: '1234',
-        address: '1234',
-        id: '1234',
-        macAddress: '0000'
-    }]);
-
-    const rebooted = await instanceB.reboot('1234');
-    expect(rebooted).toEqual(true);
-
-    await instanceA.stop();
-    await instanceB.stop();
-    await instanceC.stop();
+    await instance.stop();
 });
 
 test('#stop', async () => {
@@ -150,7 +111,7 @@ test('#send', async () => {
 
     try {
         // @ts-ignore
-       await instance.send('asd')
+        await instance.send('asd')
     } catch (e) {
         return expect(e).toStrictEqual(Error('dgram client not available'))
     }

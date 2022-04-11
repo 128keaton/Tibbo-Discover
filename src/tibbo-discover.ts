@@ -1,12 +1,24 @@
 #! /usr/bin/env node
 
 import {createSocket, Socket} from "dgram";
-import {BehaviorSubject, filter, firstValueFrom, Observable} from "rxjs";
 
-const IP = require("ip");
-const MAC_REGEX = /\[\d..\.\d..\.\d..\.\d..\.\d..\.\d..][CRA]/;
-const EMPTY_RESPONSE_LENGTH = 26;
+const MAC_REGEX = /\[\d..\.\d..\.\d..\.\d..\.\d..\.\d..]/;
 const BROADCAST_PORT = 65535;
+const MAX_SEARCH_TRIES = 2;
+
+// Request bits
+const START_BIT = '_';
+const DISCOVER_BIT = '?';
+const QUERY_BIT = 'X';
+const DELIMIT_BIT = '|';
+const REBOOT_BIT = 'E';
+
+// Response bits
+const ERR_BIT = 'C';
+const REJECT_BIT = 'R';
+const OK_BIT = 'A';
+const FAIL_BIT = 'F';
+
 
 export interface TibboDevice {
     boardType: string;
@@ -17,73 +29,112 @@ export interface TibboDevice {
     macAddress: string;
 }
 
+export interface TibboDeviceInstance {
+    ip: string;
+    id: string;
+}
 
 export class TibboDiscover {
-
-    public get devices(): Observable<TibboDevice[]> {
-        return this.$devices.asObservable().pipe(
-            filter(Boolean)
-        );
-    }
-
-    private $devices: BehaviorSubject<TibboDevice[] | null> = new BehaviorSubject<TibboDevice[] | null>(null);
     private _broadcastAddress = '255.255.255.255';
     private _isBound = false;
-    private _scanTimeout: number = 5000;
-    private _devices: { [key: string]: TibboDevice } = {};
+    private _scanTimeout: number = 3000;
+    private _seen: { [key: string]: string } = {};
+    private _devices: { [key: string]: any } = {};
     private _currentClient?: Socket;
+    private _errors: { [key: string]: string } = {};
+    private _messages: { [key: string]: string } = {};
 
-    constructor(private defaultTimeout: number = 5000) {
+    constructor(private defaultTimeout: number = 3000) {
         this._scanTimeout = defaultTimeout;
-        this.generateBroadcastAddress();
     }
 
-    public scan(timeout = 5000) {
+    public scan(timeout = this._scanTimeout): Promise<TibboDevice[]> {
         this._scanTimeout = timeout;
 
         return this.setupClient()
             .then(() => this.sendDiscoverMessage())
             .then(() => {
-                if (timeout > 0) {
-                    setTimeout(() => this.stop(), this._scanTimeout);
-                }
+                return new Promise(resolve => {
+
+                    if (timeout <= 0) {
+                        timeout = 1500;
+                    }
+
+                    setTimeout(async () => {
+                        const devices = await this.stop();
+                        resolve(devices);
+                    }, this._scanTimeout);
+                })
             })
     }
 
-    public stop() {
+    public stop(): Promise<TibboDevice[]> {
         return new Promise(resolve => {
-
-            if (this.$devices.value === null) {
-                this.$devices.next([]);
-            }
-
-            this.$devices.complete();
             this._isBound = false;
 
             if (this._currentClient) {
                 this._currentClient.close(() => {
                     this._currentClient = undefined;
-                    resolve(true);
+                    resolve(Object.values(this._devices));
                 });
             } else {
-                resolve(true);
+                resolve(Object.values(this._devices));
             }
         })
     }
 
     public reboot(ipAddress: string) {
-        return this.scan(1000).catch(() => {
-            return this.scan(5000);
-        }).then(() => {
-            return firstValueFrom(this.devices)
-        }).then(devices => {
-            return (devices || [])?.find(d => d.address === ipAddress);
-        }).then(device => {
-            if (!device) {
-                throw new Error('Could not find device');
+        return this.scanForDeviceAddress(ipAddress).then(async device => {
+            await this.setupClient();
+            if (!!device) {
+                return this.send(TibboDiscover.buildBitMessage(REBOOT_BIT, device.id, false));
+            } else {
+                return `Could not find device ${ipAddress}`;
             }
+        }).then(async (response) => {
+            await this.stop()
 
-            return this.send(`_${device.id}E`);
+            return new Promise((resolve, reject) => {
+                if (response === true) {
+                    resolve('Rebooted');
+                } else {
+                    reject(response);
+                }
+            })
+        });
+    }
+
+    public sendMessage(ipAddress: string, message: string, delimit: boolean): Promise<string> {
+        let currentDevice: TibboDeviceInstance|null;
+
+        return this.scanForDeviceAddress(ipAddress).then(async device => {
+            await this.setupClient();
+            if (!!device) {
+                currentDevice = device;
+                return this.send(TibboDiscover.buildBitMessage(message, device.id, delimit));
+            } else {
+                return null
+            }
+        }).then(() => {
+            return new Promise<string>((resolve, reject) => {
+                setTimeout(() => {
+                   if (!!currentDevice) {
+                       const errors = this._errors[currentDevice.id];
+                       const messages = this._messages[currentDevice.id];
+
+
+                       this.stop().then(() => {
+                           if (!!errors) {
+                               reject(errors)
+                           } else {
+                               resolve(messages || '');
+                           }
+                       })
+                   } else {
+                       reject('Could not find device');
+                   }
+                }, 1000);
+            })
         });
     }
 
@@ -106,35 +157,37 @@ export class TibboDiscover {
     }
 
     private sendDiscoverMessage() {
-        return this.send("_?");
+        return this.send(START_BIT + DISCOVER_BIT);
     }
 
     private sendQueryMessage(forClient: string) {
-        return this.send(TibboDiscover.buildQueryMessage(forClient));
+        return this.send(TibboDiscover.buildBitMessage(QUERY_BIT, forClient));
     }
 
     private processMessage(message: string, info: any) {
-        const address = message.match(MAC_REGEX)![0];
-        const segment = `${address}`.replace(/\[|][CRA]/g, '');
-        const macAddress = segment.split('.').map(r => Number(r)).join(':');
+        const rawAddress = message.match(MAC_REGEX)![0];
+        const responseBit = message.charAt(rawAddress.length);
 
-        if (message.length === EMPTY_RESPONSE_LENGTH) {
-            return this.sendQueryMessage(segment);
-        } else {
-            const deviceInfo = TibboDiscover.parseDeviceInfo(message, address, macAddress, info);
-
-            if (!this._devices.hasOwnProperty(deviceInfo.id)) {
-                this._devices[deviceInfo.id] = deviceInfo;
-                this.emitUpdate();
-            }
+        if (!this._seen[rawAddress] && responseBit == OK_BIT) {
+            this._seen[rawAddress] = info.address;
+            return this.sendQueryMessage(rawAddress);
+        } else if (responseBit === OK_BIT && message.includes('/')) {
+            this._devices[rawAddress] = TibboDiscover.parseDeviceInfo(message, info);
+        } else if (responseBit === ERR_BIT || responseBit === FAIL_BIT || responseBit === REJECT_BIT) {
+            this._errors[rawAddress] = message.slice(0, 25);
         }
-    }
 
-    private emitUpdate() {
-        const newDevices = Object.values(this._devices);
-
-        if (!!newDevices && newDevices.length > 0) {
-            this.$devices.next(newDevices);
+        if (responseBit === OK_BIT) {
+            if (!this._seen[rawAddress]) {
+                this._seen[rawAddress] = info.address;
+                return this.sendQueryMessage(rawAddress);
+            } else if (message.includes('/')) {
+                this._devices[rawAddress] = TibboDiscover.parseDeviceInfo(message, info);
+            }
+        } else if (responseBit === ERR_BIT || responseBit === FAIL_BIT || responseBit === REJECT_BIT) {
+            this._errors[rawAddress] = message;
+        } else {
+            this._messages[rawAddress] = message;
         }
     }
 
@@ -174,33 +227,58 @@ export class TibboDiscover {
         })
     }
 
-    private generateBroadcastAddress() {
-        const hostAddress: string[] = `${IP.address()}`.split('.');
 
-        hostAddress[3] = '255';
+    private scanForDeviceAddress(ipAddress: string, timeout: number = 1250, tries: number = 0): Promise<TibboDeviceInstance | null> {
+        return this.scan(timeout).catch(() => {
+            return this.scan(timeout + 2000);
+        }).then(() => {
+            let id = null;
+            const ip = Object.values(this._seen).find(v => v === ipAddress);
 
-        this._broadcastAddress = hostAddress.join('.');
+            if (!!ip) {
+                id = Object.keys(this._seen).find(key => this._seen[key] === ip);
+            }
+
+            if (!!id && !!ip) {
+                return {
+                    id, ip
+                }
+            }
+
+            return null;
+        }).then(device => {
+            if (!device && tries <= MAX_SEARCH_TRIES) {
+                return this.scanForDeviceAddress(ipAddress, this._scanTimeout, tries + 1);
+            } else if (!device && tries > MAX_SEARCH_TRIES) {
+                return null;
+            }
+
+            return device;
+        });
     }
 
     private static parseDeviceInfo(message: string,
-                                   rawAddress: string,
-                                   macAddress: string,
                                    info: { address: string }): TibboDevice {
-        const [boardType, data, currentApp] = message.replace(rawAddress, '').split('/');
+        const [boardType, data, currentApp] = message.slice(26).split('/');
+        const rawAddress = message.slice(0, 25);
+        const macAddress = rawAddress
+            .replace('[', '')
+            .replace(']', '')
+            .split('.').map(r => Number(r)).join(':');
 
         return {
             boardType: boardType.replace(/[<>]/g, ''),
             data,
             currentApp,
             address: info.address,
-            id: rawAddress.slice(0, rawAddress.length - 1),
+            id: rawAddress,
             macAddress
         }
     }
 
 
-    private static buildQueryMessage(client: string): string {
-        return `_[${client}]X|`;
+    private static buildBitMessage(bit: string, client: string, delimit: boolean = true): string {
+        return `${START_BIT}${client}${bit}${delimit ? DELIMIT_BIT : ''}`;
     }
 }
 
@@ -215,12 +293,42 @@ if (require.main == module) {
             throw new Error('No target specified');
         }
 
-        instance.reboot(target).catch(() => {
-            console.log('Could not find', target);
-        }).then(() => {
-            console.log(target, 'rebooted');
-        })
+        let noError = true;
 
+        instance.reboot(target).catch((err) => {
+            console.log('Could not find', target, err);
+            noError = false;
+        }).then(() => {
+            if (noError) {
+                console.log(target, 'rebooted');
+            }
+        });
+
+    } else if (process.argv[2] === 'raw') {
+        const target: string = process.argv[3];
+        const message: string = process.argv[4];
+        const noDelimit: boolean = process.argv[5] === 'false' || false
+
+        if (!target) {
+            throw new Error('No target specified');
+        }
+
+        if (!message) {
+            throw new Error('No message specified');
+        }
+
+        let noError = true;
+
+        instance.sendMessage(target, message, !noDelimit).catch((err) => {
+            noError = false;
+            return `Could not send message to ${target}: ${err}`;
+        }).then((result) => {
+            if (noError) {
+                console.log(target, result);
+            } else {
+                console.error(result)
+            }
+        });
     } else {
         let timeout: number | undefined = Number(process.argv[2]);
 
@@ -228,9 +336,8 @@ if (require.main == module) {
             timeout = undefined;
         }
 
-        instance.scan(timeout).then();
-        instance.devices.subscribe(devices => {
-            console.log(JSON.stringify({devices}))
+        instance.scan(timeout).then(devices => {
+            console.log(JSON.stringify({devices}, null, 2));
         });
     }
 }
