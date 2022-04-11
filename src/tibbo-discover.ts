@@ -4,6 +4,7 @@ import {createSocket, Socket} from "dgram";
 
 const MAC_REGEX = /\[\d..\.\d..\.\d..\.\d..\.\d..\.\d..]/;
 const BROADCAST_PORT = 65535;
+const DEFAULT_SCAN_TIMEOUT = 3000;
 const MAX_SEARCH_TRIES = 2;
 
 // Request bits
@@ -37,29 +38,28 @@ export interface TibboDeviceInstance {
 export class TibboDiscover {
     private _broadcastAddress = '255.255.255.255';
     private _isBound = false;
-    private _scanTimeout: number = 3000;
+    private _scanTimeout: number = DEFAULT_SCAN_TIMEOUT;
     private _seen: { [key: string]: string } = {};
     private _devices: { [key: string]: any } = {};
     private _currentClient?: Socket;
     private _errors: { [key: string]: string } = {};
     private _messages: { [key: string]: string } = {};
 
-    constructor(private defaultTimeout: number = 3000) {
+    constructor(private defaultTimeout: number = DEFAULT_SCAN_TIMEOUT) {
         this._scanTimeout = defaultTimeout;
     }
 
     public scan(timeout = this._scanTimeout): Promise<TibboDevice[]> {
-        this._scanTimeout = timeout;
+        if (timeout <= 0) {
+            this._scanTimeout = DEFAULT_SCAN_TIMEOUT;
+        } else {
+            this._scanTimeout = timeout;
+        }
 
         return this.setupClient()
             .then(() => this.sendDiscoverMessage())
             .then(() => {
                 return new Promise(resolve => {
-
-                    if (timeout <= 0) {
-                        timeout = 1500;
-                    }
-
                     setTimeout(async () => {
                         const devices = await this.stop();
                         resolve(devices);
@@ -105,7 +105,7 @@ export class TibboDiscover {
     }
 
     public sendMessage(ipAddress: string, message: string, delimit: boolean): Promise<string> {
-        let currentDevice: TibboDeviceInstance|null;
+        let currentDevice: TibboDeviceInstance | null;
 
         return this.scanForDeviceAddress(ipAddress).then(async device => {
             await this.setupClient();
@@ -118,21 +118,21 @@ export class TibboDiscover {
         }).then(() => {
             return new Promise<string>((resolve, reject) => {
                 setTimeout(() => {
-                   if (!!currentDevice) {
-                       const errors = this._errors[currentDevice.id];
-                       const messages = this._messages[currentDevice.id];
+                    if (!!currentDevice) {
+                        const errors = this._errors[currentDevice.id];
+                        const messages = this._messages[currentDevice.id];
 
 
-                       this.stop().then(() => {
-                           if (!!errors) {
-                               reject(errors)
-                           } else {
-                               resolve(messages || '');
-                           }
-                       })
-                   } else {
-                       reject('Could not find device');
-                   }
+                        this.stop().then(() => {
+                            if (!!errors) {
+                                reject(errors)
+                            } else {
+                                resolve(messages || '');
+                            }
+                        })
+                    } else {
+                        reject(`Could not find device ${ipAddress}`);
+                    }
                 }, 1000);
             })
         });
@@ -168,15 +168,6 @@ export class TibboDiscover {
         const rawAddress = message.match(MAC_REGEX)![0];
         const responseBit = message.charAt(rawAddress.length);
 
-        if (!this._seen[rawAddress] && responseBit == OK_BIT) {
-            this._seen[rawAddress] = info.address;
-            return this.sendQueryMessage(rawAddress);
-        } else if (responseBit === OK_BIT && message.includes('/')) {
-            this._devices[rawAddress] = TibboDiscover.parseDeviceInfo(message, info);
-        } else if (responseBit === ERR_BIT || responseBit === FAIL_BIT || responseBit === REJECT_BIT) {
-            this._errors[rawAddress] = message.slice(0, 25);
-        }
-
         if (responseBit === OK_BIT) {
             if (!this._seen[rawAddress]) {
                 this._seen[rawAddress] = info.address;
@@ -185,9 +176,9 @@ export class TibboDiscover {
                 this._devices[rawAddress] = TibboDiscover.parseDeviceInfo(message, info);
             }
         } else if (responseBit === ERR_BIT || responseBit === FAIL_BIT || responseBit === REJECT_BIT) {
-            this._errors[rawAddress] = message;
+            this._errors[rawAddress] = message.slice(25);
         } else {
-            this._messages[rawAddress] = message;
+            this._messages[rawAddress] = message.slice(25);
         }
     }
 
