@@ -7,7 +7,3 @@ Discover Tibbo devices on the network
 ```bash
 npm i tibbo-discover
 ```
-
-
-
-#### Documentation
