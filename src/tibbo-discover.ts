@@ -33,10 +33,24 @@ export class TibboDiscover {
         })
     }
 
-    public query(id: string): Promise<TibboDevice | null> {
-        return this.sendBroadcastMessage(TibboHelpers.queryMessage(id))
-            .then(socket => socket.recv())
-            .then(packet => TibboHelpers.processQueryResponse(id, packet))
+    public query(id: string, timeout: number = 1500): Promise<TibboDevice | null> {
+        return new Promise<TibboDevice | null>(resolve => {
+            let didResolve = false;
+
+            this.sendBroadcastMessage(TibboHelpers.queryMessage(id))
+                .then(socket => socket.recv())
+                .then(packet => TibboHelpers.processQueryResponse(id, packet))
+                .then(result => {
+                    didResolve = true;
+                    resolve(result)
+                });
+
+            setTimeout(() => {
+                if (!didResolve) {
+                    resolve(null)
+                }
+            }, timeout)
+        })
     }
 
     public stop(): Promise<TibboDevice[]> {

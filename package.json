@@ -1,6 +1,6 @@
 {
   "name": "tibbo-discover",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "",
   "main": "dist/tibbo-discover.js",
   "types": "dist/tibbo-discover.d.ts",
