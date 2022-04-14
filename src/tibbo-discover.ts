@@ -58,9 +58,9 @@ export class TibboDiscover {
             .then(() => Object.values(this.devices))
     }
 
-    public login(ipAddress: string, password: string): Promise<TibboDeviceLoginResponse> {
+    public login(ipAddress: string, password: string, key: string = this.key): Promise<TibboDeviceLoginResponse> {
         const socket = DgramAsPromised.createSocket("udp4");
-        const message = TibboHelpers.loginMessage(password, this.key);
+        const message = TibboHelpers.loginMessage(password, key);
         const encodedMessage = Buffer.from(message);
 
         return new Promise<TibboDeviceLoginResponse>((resolve) => {
@@ -82,7 +82,7 @@ export class TibboDiscover {
                 })
                 .then(response => ({
                     success: (response || false),
-                    key: this.key,
+                    key,
                 }))
                 .then(response => {
                     didResolve = true;
@@ -92,9 +92,9 @@ export class TibboDiscover {
             setTimeout(() => {
                 if (!didResolve) {
                     socket.close().then(() => {
-                        resolve({key: this.key, success: false, message: 'ERR_TIMEOUT'});
+                        resolve({key, success: false, message: 'ERR_TIMEOUT'});
                     }).catch(() => {
-                        resolve({key: this.key, success: false, message: 'ERR_TIMEOUT'});
+                        resolve({key, success: false, message: 'ERR_TIMEOUT'});
                     })
                 }
             }, 3000);
@@ -244,6 +244,16 @@ if (require.main == module) {
         const ipAddress: string = process.argv[3];
 
         promise = instance.reboot(ipAddress);
+    } else if (process.argv[2] === 'query') {
+        const id: string = process.argv[3];
+
+        let timeout: undefined | number = Number(process.argv[4]);
+
+        if (isNaN(timeout)) {
+            timeout = undefined;
+        }
+
+        promise = instance.query(id, timeout).then(result => instance.stop().then(() => result));
     } else {
         let timeout: undefined | number = Number(process.argv[2]);
 
@@ -254,5 +264,5 @@ if (require.main == module) {
         promise = instance.scan(timeout);
     }
 
-    promise.then(result => console.log(result));
+    promise.then(result => console.log(JSON.stringify(result, null, 2)));
 }
