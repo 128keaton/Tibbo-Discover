@@ -9,4 +9,8 @@ module.exports = {
     ],
     testEnvironment: 'node',
     moduleFileExtensions: ['js', 'ts'],
+    collectCoverageFrom: [
+        "dist/**.js",
+        "!dist/index.js"
+    ],
 };

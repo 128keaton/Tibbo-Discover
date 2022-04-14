@@ -1,6 +1,6 @@
 import {TibboHelpers} from "../dist";
 import {Buffer} from "buffer";
-import {IncomingPacket} from "dgram-as-promised";
+import DgramAsPromised, {IncomingPacket} from "dgram-as-promised";
 
 
 test('#testInstances', () => {
@@ -89,4 +89,31 @@ test('#testLoginMessage', () => {
     const valid = `L${password}|${key}`
 
     expect(TibboHelpers.loginMessage(password, key)).toEqual(valid);
+});
+
+jest.setTimeout(10000);
+test('#testIterateSend', () => {
+    const socket = DgramAsPromised.createSocket("udp4");
+
+    return socket.bind().then(() => {
+        socket.setBroadcast(true);
+        socket.setMulticastTTL(128);
+
+        return new Promise(resolve => {
+            let didResolve = false;
+
+            TibboHelpers.iterateSend(socket, Buffer.from('AAA'), '0.0.0.0', 65535).then(value => {
+                didResolve = true;
+                resolve(value);
+            });
+
+            setTimeout(() => {
+                if (!didResolve) {
+                    resolve(false);
+                }
+            }, 2000);
+        })
+    }).then(result => socket.close().then(() => result)).then(result => {
+        expect(result).toEqual(false);
+    });
 });
