@@ -1,7 +1,8 @@
 {
   "name": "tibbo-discover",
-  "version": "0.1.5",
-  "description": "",
+  "version": "0.1.6",
+  "description": "Discover Tibbo devices on the network",
+  "repository": "https://github.com/128keaton/Tibbo-Discover",
   "main": "dist/tibbo-discover.js",
   "types": "dist/tibbo-discover.d.ts",
   "scripts": {
