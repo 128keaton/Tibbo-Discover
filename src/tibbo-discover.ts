@@ -1,334 +1,209 @@
 #! /usr/bin/env node
 
-import {createSocket, Socket} from "dgram";
+import DgramAsPromised, {SocketAsPromised} from "dgram-as-promised";
+import {Buffer} from "buffer";
+import {TibboHelpers} from "./tibbo-helpers";
+import {
+    TibboDevice,
+    TibboDeviceLoginResponse,
+    TibboDeviceSetting,
+    TibboDeviceUpdateSettingResponse
+} from "./tibbo-types";
 
-const MAC_REGEX = /\[\d..\.\d..\.\d..\.\d..\.\d..\.\d..]/;
 const BROADCAST_PORT = 65535;
-const DEFAULT_SCAN_TIMEOUT = 3000;
-const MAX_SEARCH_TRIES = 2;
-
-// Request bits
-const START_BIT = '_';
-const DISCOVER_BIT = '?';
-const QUERY_BIT = 'X';
-const DELIMIT_BIT = '|';
-const REBOOT_BIT = 'E';
-
-// Response bits
-const ERR_BIT = 'C';
-const REJECT_BIT = 'R';
-const OK_BIT = 'A';
-const FAIL_BIT = 'F';
-
-
-export interface TibboDevice {
-    boardType: string;
-    currentApp: string;
-    data: any;
-    address: string;
-    id: string;
-    macAddress: string;
-}
-
-export interface TibboDeviceInstance {
-    ip: string;
-    id: string;
-}
+const BROADCAST_ADDR = '255.255.255.255';
 
 export class TibboDiscover {
-    private _broadcastAddress = '255.255.255.255';
-    private _isBound = false;
-    private _scanTimeout: number = DEFAULT_SCAN_TIMEOUT;
-    private _seen: { [key: string]: string } = {};
-    private _devices: { [key: string]: any } = {};
-    private _currentClient?: Socket;
-    private _errors: { [key: string]: string } = {};
-    private _messages: { [key: string]: string } = {};
 
-    constructor(private defaultTimeout: number = DEFAULT_SCAN_TIMEOUT) {
-        this._scanTimeout = defaultTimeout;
+    private devices: { [key: string]: TibboDevice } = {};
+    private activeSockets: SocketAsPromised[] = [];
+
+    public scan(timeout: number = 5000): Promise<TibboDevice[]> {
+        return this.sendBroadcastMessage(TibboHelpers.discoverMessage).then(() => {
+            return new Promise(resolve => {
+                setTimeout(() => this.stop().then(devices => resolve(devices)), timeout);
+            })
+        })
     }
 
-    public scan(timeout = this._scanTimeout): Promise<TibboDevice[]> {
-        if (timeout <= 0) {
-            this._scanTimeout = DEFAULT_SCAN_TIMEOUT;
-        } else {
-            this._scanTimeout = timeout;
-        }
-
-        return this.setupClient()
-            .then(() => this.sendDiscoverMessage())
-            .then(() => {
-                return new Promise(resolve => {
-                    setTimeout(async () => {
-                        const devices = await this.stop();
-                        resolve(devices);
-                    }, this._scanTimeout);
-                })
-            })
+    public query(id: string): Promise<TibboDevice | null> {
+        return this.sendBroadcastMessage(TibboHelpers.queryMessage(id))
+            .then(socket => socket.recv())
+            .then(packet => TibboHelpers.processQueryResponse(id, packet))
     }
 
     public stop(): Promise<TibboDevice[]> {
-        return new Promise(resolve => {
-            this._isBound = false;
+        return Promise.all(this.activeSockets.map(socket => socket.close()))
+            .then(() => Object.values(this.devices))
+    }
 
-            if (this._currentClient) {
-                this._currentClient.close(() => {
-                    this._currentClient = undefined;
-                    resolve(Object.values(this._devices));
+    public login(ipAddress: string, password: string): Promise<TibboDeviceLoginResponse> {
+        const socket = DgramAsPromised.createSocket("udp4");
+        const key = 'apple123';
+        const message = `L${password}|${key}`;
+        const encodedMessage = Buffer.from(message);
+
+        return new Promise<TibboDeviceLoginResponse>((resolve) => {
+            let didResolve = false;
+
+            socket.bind().then(() => {
+                this.activeSockets.push(socket);
+
+                socket.setBroadcast(true);
+                socket.setMulticastTTL(128);
+
+                return socket.send(encodedMessage, 0, encodedMessage.length, BROADCAST_PORT, ipAddress);
+            }).then(() => socket.recv())
+                .then(packet => TibboHelpers.processLoginResponse(packet))
+                .then(response => {
+                    return socket.close()
+                        .catch(() => response)
+                        .then(() => response)
+                })
+                .then(response => ({
+                    success: (response || false),
+                    key,
+                }))
+                .then(response => {
+                    didResolve = true;
+                    resolve(response);
                 });
-            } else {
-                resolve(Object.values(this._devices));
-            }
+
+            setTimeout(() => {
+                if (!didResolve) {
+                    socket.close().then(() => {
+                        resolve({key, success: false, message: 'ERR_TIMEOUT'});
+                    }).catch(() => {
+                        resolve({key, success: false, message: 'ERR_TIMEOUT'});
+                    })
+                }
+            }, 3000);
         })
     }
 
-    public reboot(ipAddress: string) {
-        return this.scanForDeviceAddress(ipAddress).then(async device => {
-            await this.setupClient();
-            if (!!device) {
-                return this.send(TibboDiscover.buildBitMessage(REBOOT_BIT, device.id, false));
-            } else {
-                return `Could not find device ${ipAddress}`;
-            }
-        }).then(async (response) => {
-            await this.stop()
+    public async updateSetting(setting: string,
+                               value: string,
+                               ipAddress: string,
+                               password: string): Promise<TibboDeviceUpdateSettingResponse[] | TibboDeviceLoginResponse> {
+        const didAuth = await this.login(ipAddress, password);
 
-            return new Promise((resolve, reject) => {
-                if (response === true) {
-                    resolve('Rebooted');
-                } else {
-                    reject(response);
-                }
-            })
-        });
-    }
-
-    public sendMessage(ipAddress: string, message: string, delimit: boolean): Promise<string> {
-        let currentDevice: TibboDeviceInstance | null;
-
-        return this.scanForDeviceAddress(ipAddress).then(async device => {
-            await this.setupClient();
-            if (!!device) {
-                currentDevice = device;
-                return this.send(TibboDiscover.buildBitMessage(message, device.id, delimit));
-            } else {
-                return null
-            }
-        }).then(() => {
-            return new Promise<string>((resolve, reject) => {
-                setTimeout(() => {
-                    if (!!currentDevice) {
-                        const errors = this._errors[currentDevice.id];
-                        const messages = this._messages[currentDevice.id];
-
-
-                        this.stop().then(() => {
-                            if (!!errors) {
-                                reject(errors)
-                            } else {
-                                resolve(messages || '');
-                            }
-                        })
-                    } else {
-                        reject(`Could not find device ${ipAddress}`);
-                    }
-                }, 1000);
-            })
-        });
-    }
-
-    private send(message: string) {
-        const client = this._currentClient;
-
-        if (!client) {
-            throw new Error('dgram client not available');
+        if (!didAuth.success) {
+            return didAuth;
         }
 
-        return new Promise((resolve, reject) => {
-            client.send(Buffer.from(message), BROADCAST_PORT, this._broadcastAddress, (err) => {
-                if (!!err) {
-                    reject(err);
-                } else {
-                    resolve(true);
-                }
-            });
-        })
+        const socket = DgramAsPromised.createSocket("udp4");
+        const message = `S${setting}@${value}|${didAuth.key}`;
+        const encodedMessage = Buffer.from(message);
+
+        return socket.bind().then(() => {
+            this.activeSockets.push(socket);
+
+            socket.setBroadcast(true);
+            socket.setMulticastTTL(128);
+
+            return socket.send(encodedMessage, 0, encodedMessage.length, BROADCAST_PORT, ipAddress);
+        }).then(() => socket.recv())
+            .then(packet => TibboHelpers.processSettingResponse(packet))
+            .then(response => socket.close().then(() => response))
+            .then(response => ({
+                success: (response || false),
+                key: didAuth.key
+            }))
     }
 
-    private sendDiscoverMessage() {
-        return this.send(START_BIT + DISCOVER_BIT);
-    }
+    public async updateSettings(settings: TibboDeviceSetting[],
+                                ipAddress: string,
+                                password: string): Promise<TibboDeviceUpdateSettingResponse[] | TibboDeviceLoginResponse> {
+        const didAuth = await this.login(ipAddress, password);
 
-    private sendQueryMessage(forClient: string) {
-        return this.send(TibboDiscover.buildBitMessage(QUERY_BIT, forClient));
-    }
-
-    private processMessage(message: string, info: any) {
-        const rawAddress = message.match(MAC_REGEX)![0];
-        const responseBit = message.charAt(rawAddress.length);
-
-        if (responseBit === OK_BIT) {
-            if (!this._seen[rawAddress]) {
-                this._seen[rawAddress] = info.address;
-                return this.sendQueryMessage(rawAddress);
-            } else if (message.includes('/')) {
-                this._devices[rawAddress] = TibboDiscover.parseDeviceInfo(message, info);
-            }
-        } else if (responseBit === ERR_BIT || responseBit === FAIL_BIT || responseBit === REJECT_BIT) {
-            this._errors[rawAddress] = message.slice(25);
-        } else {
-            this._messages[rawAddress] = message.slice(25);
+        if (!didAuth.success) {
+            return didAuth;
         }
+
+        const socket = DgramAsPromised.createSocket("udp4");
+        const settingMessages = settings.map(setting => `S${setting.settingName}@${setting.settingValue}|${didAuth.key}`)
+            .map(string => Buffer.from(string));
+
+        return socket.bind().then(() => {
+            this.activeSockets.push(socket);
+
+            socket.setBroadcast(true);
+            socket.setMulticastTTL(128);
+
+            return Promise.all(settingMessages.map(setting => TibboHelpers.iterateSend(socket, setting, ipAddress, BROADCAST_PORT)))
+        }).then((results: boolean[]) => {
+            return results.map((result, index) => ({
+                success: result,
+                setting: settings[index]
+            }))
+        }).then(results => socket.close().then(() => results));
     }
 
-    private setupClient() {
-        return new Promise((resolve) => {
-            if (this._isBound) {
-                resolve(true);
-                return;
-            }
+    private sendBroadcastMessage(message: string) {
+        const socket = DgramAsPromised.createSocket("udp4");
+        const encodedMessage = Buffer.from(message);
 
-            if (this._currentClient === undefined) {
-                this._currentClient = createSocket('udp4');
-            }
+        return socket.bind().then(() => {
+            this.activeSockets.push(socket);
 
-            const actualClient = this._currentClient!;
+            socket.setBroadcast(true);
+            socket.setMulticastTTL(128);
 
+            socket.socket.on('message', (msg) => {
+                const tibboID = TibboHelpers.getMacAddress(msg);
 
-            actualClient.on('message', (buffer: Buffer, info: { address: string }) => {
-                const message = buffer.toString();
-                if (!!message) {
-                    const matches = message.match(MAC_REGEX);
-
-                    if (!!matches) {
-                        this.processMessage(message, info)?.then();
-                    }
+                if (!!tibboID && !this.devices[tibboID]) {
+                    return this.query(tibboID).then(result => {
+                        if (!!result)
+                            this.devices[tibboID] = result;
+                    })
                 }
             });
 
-            actualClient.once('listening', () => {
-                this._isBound = true;
-
-                actualClient.setBroadcast(true);
-                resolve(true);
-            });
-
-            actualClient.bind();
-        })
+            return socket.send(encodedMessage, 0, encodedMessage.length, BROADCAST_PORT, BROADCAST_ADDR);
+        }).then(() => socket);
     }
 
-
-    private scanForDeviceAddress(ipAddress: string, timeout: number = 1250, tries: number = 0): Promise<TibboDeviceInstance | null> {
-        return this.scan(timeout).catch(() => {
-            return this.scan(timeout + 2000);
-        }).then(() => {
-            let id = null;
-            const ip = Object.values(this._seen).find(v => v === ipAddress);
-
-            if (!!ip) {
-                id = Object.keys(this._seen).find(key => this._seen[key] === ip);
-            }
-
-            if (!!id && !!ip) {
-                return {
-                    id, ip
-                }
-            }
-
-            return null;
-        }).then(device => {
-            if (!device && tries <= MAX_SEARCH_TRIES) {
-                return this.scanForDeviceAddress(ipAddress, this._scanTimeout, tries + 1);
-            } else if (!device && tries > MAX_SEARCH_TRIES) {
-                return null;
-            }
-
-            return device;
-        });
-    }
-
-    private static parseDeviceInfo(message: string,
-                                   info: { address: string }): TibboDevice {
-        const [boardType, data, currentApp] = message.slice(26).split('/');
-        const rawAddress = message.slice(0, 25);
-        const macAddress = rawAddress
-            .replace('[', '')
-            .replace(']', '')
-            .split('.').map(r => Number(r)).join(':');
-
-        return {
-            boardType: boardType.replace(/[<>]/g, ''),
-            data,
-            currentApp,
-            address: info.address,
-            id: rawAddress,
-            macAddress
-        }
-    }
-
-
-    private static buildBitMessage(bit: string, client: string, delimit: boolean = true): string {
-        return `${START_BIT}${client}${bit}${delimit ? DELIMIT_BIT : ''}`;
-    }
 }
 
 /* istanbul ignore if */
 if (require.main == module) {
     const instance = new TibboDiscover();
 
-    if (process.argv[2] === 'reboot') {
-        const target: string = process.argv[3];
 
-        if (!target) {
-            throw new Error('No target specified');
-        }
+    if (process.argv[2] === 'login') {
+        const ipAddress: string = process.argv[3];
+        const password: string = process.argv[4];
 
-        let noError = true;
+        instance.login(ipAddress, password).then(result => console.log(result));
+    } else if (process.argv[2] === 'setting') {
+        const ipAddress: string = process.argv[3];
+        const password: string = process.argv[4];
+        const setting: string = process.argv[5];
+        const value: string = process.argv[6];
 
-        instance.reboot(target).catch((err) => {
-            console.log('Could not find', target, err);
-            noError = false;
-        }).then(() => {
-            if (noError) {
-                console.log(target, 'rebooted');
-            }
-        });
+        instance.updateSetting(setting, value, ipAddress, password).then(result => console.log(result));
+    } else if (process.argv[2] === 'settings') {
+        const ipAddress: string = process.argv[3];
+        const password: string = process.argv[4];
+        const rawSettings: string[] = process.argv[5].split(',');
+        const settings: TibboDeviceSetting[] = [];
 
-    } else if (process.argv[2] === 'raw') {
-        const target: string = process.argv[3];
-        const message: string = process.argv[4];
-        const noDelimit: boolean = process.argv[5] === 'false' || false
-
-        if (!target) {
-            throw new Error('No target specified');
-        }
-
-        if (!message) {
-            throw new Error('No message specified');
-        }
-
-        let noError = true;
-
-        instance.sendMessage(target, message, !noDelimit).catch((err) => {
-            noError = false;
-            return `Could not send message to ${target}: ${err}`;
-        }).then((result) => {
-            if (noError) {
-                console.log(target, result);
+        let currentSetting: string;
+        rawSettings.forEach((value, index) => {
+            if (index % 2 === 0) {
+                currentSetting = value;
             } else {
-                console.error(result)
+                settings.push({
+                    settingName: currentSetting,
+                    settingValue: value
+                })
             }
         });
+
+
+        instance.updateSettings(settings, ipAddress, password).then(result => console.log(result));
     } else {
-        let timeout: number | undefined = Number(process.argv[2]);
-
-        if (isNaN(timeout) || !timeout) {
-            timeout = undefined;
-        }
-
-        instance.scan(timeout).then(devices => {
-            console.log(JSON.stringify({devices}, null, 2));
-        });
+        instance.scan().then(result => console.log(result));
     }
 }

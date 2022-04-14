@@ -1,190 +1,80 @@
-import {TibboDiscover} from "../dist/tibbo-discover";
+import {TibboDeviceSetting, TibboDiscover} from "../dist";
 
 
 test('#testInstances', () => {
-    const instance = new TibboDiscover();
+    const discover = new TibboDiscover();
 
-    expect(instance).toBeInstanceOf(TibboDiscover);
-    expect(instance.stop).toBeInstanceOf(Function);
-    expect(instance.scan).toBeInstanceOf(Function);
+    expect(discover.scan).toBeInstanceOf(Function);
+    expect(discover.query).toBeInstanceOf(Function);
+    expect(discover.stop).toBeInstanceOf(Function);
+    expect(discover.login).toBeInstanceOf(Function);
+    expect(discover.updateSetting).toBeInstanceOf(Function);
+    expect(discover.updateSettings).toBeInstanceOf(Function);
+
+    // @ts-ignore
+    expect(discover.sendBroadcastMessage).toBeInstanceOf(Function);
 });
 
-test('#testValues', () => {
-    const instanceA = new TibboDiscover();
-    const instanceB = new TibboDiscover(6000);
+test('#testScan', () => {
+    const discover = new TibboDiscover();
 
-    // @ts-ignore
-    expect(instanceA._scanTimeout).toEqual(3000);
-
-    // @ts-ignore
-    expect(instanceB._scanTimeout).toEqual(6000);
-
-    const instanceC = new TibboDiscover();
-    instanceC.scan(1000);
-
-    // @ts-ignore
-    expect(instanceC._scanTimeout).toEqual(1000);
-
-    const instanceD = new TibboDiscover();
-    instanceD.scan(0);
-
-    // @ts-ignore
-    expect(instanceD._scanTimeout).toEqual(3000);
+    return discover.scan(100).then(devices => {
+        expect(devices).toBeInstanceOf(Array);
+    })
 });
 
-jest.setTimeout(25000);
-test('#checkArray', async () => {
-    const instance = new TibboDiscover();
+test('#testQuery', () => {
+    const discover = new TibboDiscover();
 
-    const devices = await instance.scan(1);
+    return discover.query('[000.036.119.087.075.146]').then(device => {
+       if (device) {
+           expect(device).toHaveProperty('board')
+           expect(device).toHaveProperty('application')
+       } else {
+           expect(device).toBeNull();
+       }
 
-    expect(devices).toBeInstanceOf(Array);
-
-    await instance.stop();
+       return discover.stop();
+    })
 });
 
-test('#sendMessage', async () => {
-    const instance = new TibboDiscover(1000);
-    const ipAddress = '0.0.0.0';
+test('#testStop', () => {
+    const discover = new TibboDiscover();
 
-    try {
-        await instance.sendMessage(ipAddress, 'X', true);
-    } catch (e) {
-        expect(e).toEqual(`Could not find device ${ipAddress}`)
-    }
-
-    await instance.stop();
+    return discover.stop().then(devices => {
+        expect(devices).toBeInstanceOf(Array);
+    })
 });
 
-test('#checkErrors',  () => {
-    const address = '0.0.0.0';
-    const client = '[000.036.119.087.075.124]'
+test('#testLogin', () => {
+    const discover = new TibboDiscover();
+    const fakeResponse = {key: 'apple123', message: 'ERR_TIMEOUT', success: false};
 
-    const instanceA = new TibboDiscover(1000);
-    const instanceB = new TibboDiscover(1000);
-    const instanceC = new TibboDiscover(1000);
-
-    const messageA = `${client}C`;
-    const messageB = `${client}R`;
-    const messageC = `${client}F`;
-
-    // @ts-ignore
-    instanceA.processMessage(messageA, {address});
-
-    // @ts-ignore
-    expect(instanceA._errors[client]).toEqual('C');
-
-    // @ts-ignore
-    instanceB.processMessage(messageB, {address});
-
-    // @ts-ignore
-    expect(instanceB._errors[client]).toEqual('R');
-
-    // @ts-ignore
-    instanceC.processMessage(messageC, {address});
-
-    // @ts-ignore
-    expect(instanceC._errors[client]).toEqual('F');
+    return discover.login('0.0.0.0', 'password').then(response => {
+        expect(response).toEqual(fakeResponse);
+    });
 });
 
+test('#testUpdateSetting', () => {
+    const discover = new TibboDiscover();
+    const fakeResponse = {key: 'apple123', message: 'ERR_TIMEOUT', success: false};
 
-test('#checkFallthru',  () => {
-    const address = '0.0.0.0';
-    const client = '[000.036.119.087.075.124]'
-
-    const instance = new TibboDiscover(1000);
-    const message = `${client}Z`;
-
-
-    // @ts-ignore
-    instance.processMessage(message, {address});
-
-    // @ts-ignore
-    expect(instance._messages[client]).toEqual('Z');
+    return discover.updateSetting('API', '12345', '0.0.0.0', 'password').then(response => {
+        expect(response).toEqual(fakeResponse);
+    });
 });
 
+test('#testUpdateSettings', () => {
+    const discover = new TibboDiscover();
+    const fakeResponse = {key: 'apple123', message: 'ERR_TIMEOUT', success: false};
+    const settings: TibboDeviceSetting[] = [
+        {
+            settingName: 'API',
+            settingValue: '12345'
+        }
+    ];
 
-test('#checkBadClient', async () => {
-    const instance = new TibboDiscover();
-
-    // @ts-ignore
-    instance._currentClient = undefined;
-
-    try {
-        await instance.scan()
-    } catch (e) {
-        return expect(e).toEqual('dgram client not available')
-    }
-
-    try {
-        // @ts-ignore
-        await instance.send('BAD');
-    } catch (e) {
-        expect(e).toBeInstanceOf(Error);
-    }
-
-    await instance.stop();
-});
-
-test('#checkDoubleBound', async () => {
-    const instance = new TibboDiscover();
-
-    // @ts-ignore
-    await instance.setupClient(instance._currentClient);
-
-    // @ts-ignore
-    expect(instance._isBound).toBe(true);
-
-    // @ts-ignore
-    await instance.setupClient(instance._currentClient);
-
-    // @ts-ignore
-    expect(instance._isBound).toBe(true);
-
-    await instance.stop();
-
-    // @ts-ignore
-    expect(instance._isBound).toBe(false);
-});
-
-jest.setTimeout(95000);
-test('#reboot', async () => {
-    const instance = new TibboDiscover(1000);
-    const ipAddress = '0.0.0.0';
-
-    try {
-        await instance.reboot(ipAddress)
-    } catch (e) {
-        expect(e).toEqual(`Could not find device ${ipAddress}`)
-    }
-
-    await instance.stop();
-});
-
-test('#stop', async () => {
-    const instance = new TibboDiscover();
-
-    // @ts-ignore
-    instance._currentClient = undefined;
-
-    try {
-        await instance.stop();
-    } catch (e) {
-        return expect(e).toStrictEqual(Error('dgram client not available'))
-    }
-});
-
-test('#send', async () => {
-    const instance = new TibboDiscover();
-
-    // @ts-ignore
-    instance._currentClient = undefined;
-    expect.assertions(1);
-
-    try {
-        // @ts-ignore
-        await instance.send('asd')
-    } catch (e) {
-        return expect(e).toStrictEqual(Error('dgram client not available'))
-    }
+    return discover.updateSettings(settings, '0.0.0.0', 'password').then(response => {
+        expect(response).toEqual(fakeResponse);
+    });
 });
