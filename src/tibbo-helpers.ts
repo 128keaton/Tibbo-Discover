@@ -12,12 +12,14 @@ const START_BIT = '_';
 const DISCOVER_BIT = '?';
 const QUERY_BIT = 'X';
 const DELIMIT_BIT = '|';
+const BUZZ_BIT = 'B';
 const REBOOT_BIT = 'E';
+const LOGIN_BIT = 'L';
+const UPDATE_SETTING_BIT = 'S';
 
 // Response bits
 const ERR_BIT = 'C';
 const REJECT_BIT = 'R';
-const OK_BIT = 'A';
 const FAIL_BIT = 'F';
 const DENY_BIT = 'D';
 
@@ -26,6 +28,14 @@ export class TibboHelpers {
 
     public static get discoverMessage() {
         return `${START_BIT}${DISCOVER_BIT}`;
+    }
+
+    public static get buzzMessage() {
+        return BUZZ_BIT;
+    }
+
+    public static get rebootMessage() {
+        return REBOOT_BIT;
     }
 
     public static processQueryResponse(id: string, packet?: IncomingPacket): TibboDevice | null {
@@ -53,7 +63,10 @@ export class TibboHelpers {
 
         const rawMessage = packet.msg.toString();
 
-        return rawMessage[0] !== DENY_BIT;
+        return rawMessage[0] !== DENY_BIT &&
+            rawMessage[0] !== REJECT_BIT &&
+            rawMessage[0] !== FAIL_BIT &&
+            rawMessage[0] !== ERR_BIT;
     }
 
     public static processSettingResponse(packet?: IncomingPacket) {
@@ -62,7 +75,10 @@ export class TibboHelpers {
         }
 
         const rawMessage = packet.msg.toString();
-        return rawMessage[0] !== DENY_BIT && rawMessage[0] === OK_BIT;
+        return rawMessage[0] !== DENY_BIT &&
+            rawMessage[0] !== REJECT_BIT &&
+            rawMessage[0] !== FAIL_BIT &&
+            rawMessage[0] !== ERR_BIT;
     }
 
     public static queryMessage(id: string): string {
@@ -71,6 +87,14 @@ export class TibboHelpers {
         }
 
         return `${START_BIT}${id}${QUERY_BIT}`;
+    }
+
+    public static updateSettingMessage(setting: string, value: string, key: string): string {
+        return `${UPDATE_SETTING_BIT}${setting}@${value}${DELIMIT_BIT}${key}`;
+    }
+
+    public static loginMessage(password: string, key: string): string {
+        return `${LOGIN_BIT}${password}${DELIMIT_BIT}${key}`;
     }
 
     public static getMacAddress(buffer: Buffer): string | null {

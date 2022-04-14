@@ -17,6 +17,13 @@ export class TibboDiscover {
 
     private devices: { [key: string]: TibboDevice } = {};
     private activeSockets: SocketAsPromised[] = [];
+    private readonly key: string = 'tibbo123';
+
+    constructor(key?: string) {
+        if (!!key && key.length) {
+            this.key = key;
+        }
+    }
 
     public scan(timeout: number = 5000): Promise<TibboDevice[]> {
         return this.sendBroadcastMessage(TibboHelpers.discoverMessage).then(() => {
@@ -39,8 +46,7 @@ export class TibboDiscover {
 
     public login(ipAddress: string, password: string): Promise<TibboDeviceLoginResponse> {
         const socket = DgramAsPromised.createSocket("udp4");
-        const key = 'apple123';
-        const message = `L${password}|${key}`;
+        const message = TibboHelpers.loginMessage(password, this.key);
         const encodedMessage = Buffer.from(message);
 
         return new Promise<TibboDeviceLoginResponse>((resolve) => {
@@ -62,7 +68,7 @@ export class TibboDiscover {
                 })
                 .then(response => ({
                     success: (response || false),
-                    key,
+                    key: this.key,
                 }))
                 .then(response => {
                     didResolve = true;
@@ -72,43 +78,45 @@ export class TibboDiscover {
             setTimeout(() => {
                 if (!didResolve) {
                     socket.close().then(() => {
-                        resolve({key, success: false, message: 'ERR_TIMEOUT'});
+                        resolve({key: this.key, success: false, message: 'ERR_TIMEOUT'});
                     }).catch(() => {
-                        resolve({key, success: false, message: 'ERR_TIMEOUT'});
+                        resolve({key: this.key, success: false, message: 'ERR_TIMEOUT'});
                     })
                 }
             }, 3000);
         })
     }
 
+    public buzz(ipAddress: string) {
+        const socket = DgramAsPromised.createSocket("udp4");
+        const encodedMessage = Buffer.from(TibboHelpers.buzzMessage);
+
+        return this.handleSendDisconnect(socket, encodedMessage, ipAddress);
+    }
+
+    public reboot(ipAddress: string) {
+        const socket = DgramAsPromised.createSocket("udp4");
+        const encodedMessage = Buffer.from(TibboHelpers.rebootMessage);
+
+        return this.handleSendDisconnect(socket, encodedMessage, ipAddress);
+    }
+
     public async updateSetting(setting: string,
                                value: string,
                                ipAddress: string,
                                password: string): Promise<TibboDeviceUpdateSettingResponse[] | TibboDeviceLoginResponse> {
-        const didAuth = await this.login(ipAddress, password);
+        const settings = [
+            {
+                settingValue: value,
+                settingName: setting
+            }
+        ];
 
-        if (!didAuth.success) {
-            return didAuth;
-        }
-
-        const socket = DgramAsPromised.createSocket("udp4");
-        const message = `S${setting}@${value}|${didAuth.key}`;
-        const encodedMessage = Buffer.from(message);
-
-        return socket.bind().then(() => {
-            this.activeSockets.push(socket);
-
-            socket.setBroadcast(true);
-            socket.setMulticastTTL(128);
-
-            return socket.send(encodedMessage, 0, encodedMessage.length, BROADCAST_PORT, ipAddress);
-        }).then(() => socket.recv())
-            .then(packet => TibboHelpers.processSettingResponse(packet))
-            .then(response => socket.close().then(() => response))
-            .then(response => ({
-                success: (response || false),
-                key: didAuth.key
-            }))
+        return this.updateSettings(
+            settings,
+            ipAddress,
+            password
+        );
     }
 
     public async updateSettings(settings: TibboDeviceSetting[],
@@ -121,7 +129,7 @@ export class TibboDiscover {
         }
 
         const socket = DgramAsPromised.createSocket("udp4");
-        const settingMessages = settings.map(setting => `S${setting.settingName}@${setting.settingValue}|${didAuth.key}`)
+        const settingMessages = settings.map(setting => TibboHelpers.updateSettingMessage(setting.settingName, setting.settingValue, didAuth.key))
             .map(string => Buffer.from(string));
 
         return socket.bind().then(() => {
@@ -164,25 +172,36 @@ export class TibboDiscover {
         }).then(() => socket);
     }
 
+    private handleSendDisconnect(socket: SocketAsPromised, encodedMessage: Buffer, ipAddress: string) {
+        return socket.bind().then(() => {
+            this.activeSockets.push(socket);
+
+            socket.setBroadcast(true);
+            socket.setMulticastTTL(128);
+
+            return socket.send(encodedMessage, 0, encodedMessage.length, BROADCAST_PORT, ipAddress);
+        }).then(() => socket.close()).then(() => true);
+    }
+
 }
 
 /* istanbul ignore if */
 if (require.main == module) {
     const instance = new TibboDiscover();
-
+    let promise: Promise<any>;
 
     if (process.argv[2] === 'login') {
         const ipAddress: string = process.argv[3];
         const password: string = process.argv[4];
 
-        instance.login(ipAddress, password).then(result => console.log(result));
+        promise = instance.login(ipAddress, password);
     } else if (process.argv[2] === 'setting') {
         const ipAddress: string = process.argv[3];
         const password: string = process.argv[4];
         const setting: string = process.argv[5];
         const value: string = process.argv[6];
 
-        instance.updateSetting(setting, value, ipAddress, password).then(result => console.log(result));
+        promise = instance.updateSetting(setting, value, ipAddress, password);
     } else if (process.argv[2] === 'settings') {
         const ipAddress: string = process.argv[3];
         const password: string = process.argv[4];
@@ -202,8 +221,24 @@ if (require.main == module) {
         });
 
 
-        instance.updateSettings(settings, ipAddress, password).then(result => console.log(result));
+        promise = instance.updateSettings(settings, ipAddress, password);
+    } else if (process.argv[2] === 'buzz') {
+        const ipAddress: string = process.argv[3];
+
+        promise = instance.buzz(ipAddress);
+    } else if (process.argv[2] === 'reboot') {
+        const ipAddress: string = process.argv[3];
+
+        promise = instance.reboot(ipAddress);
     } else {
-        instance.scan().then(result => console.log(result));
+        let timeout: undefined | number = Number(process.argv[2]);
+
+        if (isNaN(timeout)) {
+            timeout = undefined;
+        }
+
+        promise = instance.scan(timeout);
     }
+
+    promise.then(result => console.log(result));
 }

@@ -8,11 +8,28 @@ test('#testInstances', () => {
     expect(discover.query).toBeInstanceOf(Function);
     expect(discover.stop).toBeInstanceOf(Function);
     expect(discover.login).toBeInstanceOf(Function);
+    expect(discover.buzz).toBeInstanceOf(Function);
+    expect(discover.reboot).toBeInstanceOf(Function);
     expect(discover.updateSetting).toBeInstanceOf(Function);
     expect(discover.updateSettings).toBeInstanceOf(Function);
 
     // @ts-ignore
     expect(discover.sendBroadcastMessage).toBeInstanceOf(Function);
+
+    // @ts-ignore
+    expect(discover.handleSendDisconnect).toBeInstanceOf(Function);
+});
+
+test('#testKey', () => {
+    const customKey = 'apple123';
+    const discover = new TibboDiscover();
+    const discoverCustom = new TibboDiscover(customKey);
+
+    // @ts-ignore
+    expect(discover.key).toEqual('tibbo123');
+
+    // @ts-ignore
+    expect(discoverCustom.key).toEqual(customKey);
 });
 
 test('#testScan', () => {
@@ -48,7 +65,7 @@ test('#testStop', () => {
 
 test('#testLogin', () => {
     const discover = new TibboDiscover();
-    const fakeResponse = {key: 'apple123', message: 'ERR_TIMEOUT', success: false};
+    const fakeResponse = {key: 'tibbo123', message: 'ERR_TIMEOUT', success: false};
 
     return discover.login('0.0.0.0', 'password').then(response => {
         expect(response).toEqual(fakeResponse);
@@ -57,7 +74,7 @@ test('#testLogin', () => {
 
 test('#testUpdateSetting', () => {
     const discover = new TibboDiscover();
-    const fakeResponse = {key: 'apple123', message: 'ERR_TIMEOUT', success: false};
+    const fakeResponse = {key: 'tibbo123', message: 'ERR_TIMEOUT', success: false};
 
     return discover.updateSetting('API', '12345', '0.0.0.0', 'password').then(response => {
         expect(response).toEqual(fakeResponse);
@@ -66,7 +83,7 @@ test('#testUpdateSetting', () => {
 
 test('#testUpdateSettings', () => {
     const discover = new TibboDiscover();
-    const fakeResponse = {key: 'apple123', message: 'ERR_TIMEOUT', success: false};
+    const fakeResponse = {key: 'tibbo123', message: 'ERR_TIMEOUT', success: false};
     const settings: TibboDeviceSetting[] = [
         {
             settingName: 'API',
@@ -77,4 +94,20 @@ test('#testUpdateSettings', () => {
     return discover.updateSettings(settings, '0.0.0.0', 'password').then(response => {
         expect(response).toEqual(fakeResponse);
     });
+});
+
+test('#testReboot', () => {
+    const discover = new TibboDiscover();
+
+    return discover.reboot('0.0.0.0').then(result => {
+        expect(result).toBeTruthy();
+    })
+});
+
+test('#testBuzz', () => {
+    const discover = new TibboDiscover();
+
+    return discover.buzz('0.0.0.0').then(result => {
+        expect(result).toBeTruthy();
+    })
 });

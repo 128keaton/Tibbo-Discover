@@ -8,6 +8,8 @@ test('#testInstances', () => {
     expect(TibboHelpers.processLoginResponse).toBeInstanceOf(Function);
     expect(TibboHelpers.processSettingResponse).toBeInstanceOf(Function);
     expect(TibboHelpers.queryMessage).toBeInstanceOf(Function);
+    expect(TibboHelpers.updateSettingMessage).toBeInstanceOf(Function);
+    expect(TibboHelpers.loginMessage).toBeInstanceOf(Function);
     expect(TibboHelpers.getMacAddress).toBeInstanceOf(Function);
     expect(TibboHelpers.iterateSend).toBeInstanceOf(Function);
 });
@@ -68,4 +70,23 @@ test('#testGetMacAddress', () => {
 
     expect(TibboHelpers.getMacAddress(bufferID)).toEqual(id);
     expect(TibboHelpers.getMacAddress(invalidBufferID)).toBeNull();
+});
+
+test('#testUpdateSettingMessage', () => {
+    const setting = 'API';
+    const value = 'TEST';
+    const key = 'tibbo123';
+
+    const valid = `S${setting}@${value}|${key}`
+
+    expect(TibboHelpers.updateSettingMessage(setting, value, key)).toEqual(valid);
+});
+
+test('#testLoginMessage', () => {
+    const password = 'tibbo';
+    const key = 'tibbo123';
+
+    const valid = `L${password}|${key}`
+
+    expect(TibboHelpers.loginMessage(password, key)).toEqual(valid);
 });
