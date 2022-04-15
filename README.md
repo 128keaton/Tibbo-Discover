@@ -66,12 +66,12 @@ defaults to `tibbo123`.
 
 <br>
 
-* Buzz - `buzz(ipAddress: string)`
+* Buzz - `buzz(ipAddress: string, password: string, key: string)`
 
     Buzz the Tibbo at the IP address passed to the function
 
 <br>
 
-* Reboot - `reboot(ipAddress: string)`
+* Reboot - `reboot(ipAddress: string, password: string, key: string)`
 
     Reboot the Tibbo at the IP address passed to the function

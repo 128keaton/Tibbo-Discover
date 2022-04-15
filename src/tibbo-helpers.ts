@@ -30,14 +30,6 @@ export class TibboHelpers {
         return `${START_BIT}${DISCOVER_BIT}`;
     }
 
-    public static get buzzMessage() {
-        return BUZZ_BIT;
-    }
-
-    public static get rebootMessage() {
-        return REBOOT_BIT;
-    }
-
     public static processQueryResponse(id: string, packet?: IncomingPacket): TibboDevice | null {
         if (!packet) {
             return null;
@@ -89,6 +81,14 @@ export class TibboHelpers {
         return `${START_BIT}${id}${QUERY_BIT}`;
     }
 
+    public static rebootMessage(key: string): string {
+        return `${REBOOT_BIT}${DELIMIT_BIT}${key}`;
+    }
+
+    public static buzzMessage(key: string): string {
+        return `${BUZZ_BIT}${DELIMIT_BIT}${key}`;
+    }
+
     public static updateSettingMessage(setting: string, value: string, key: string): string {
         return `${UPDATE_SETTING_BIT}${setting}@${value}${DELIMIT_BIT}${key}`;
     }
@@ -114,6 +114,16 @@ export class TibboHelpers {
                 .then(() => socket.recv())
                 .then((packet) => resolve(this.processSettingResponse(packet)))
         })
+    }
+
+    public static checkIfDenied(packet?: IncomingPacket): boolean {
+        if (!packet) {
+            return false
+        }
+
+        const message = packet.msg.toString();
+
+        return message === `${DENY_BIT}${DELIMIT_BIT}` || message === DENY_BIT;
     }
 
 

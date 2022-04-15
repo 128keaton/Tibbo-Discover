@@ -91,6 +91,18 @@ test('#testLoginMessage', () => {
     expect(TibboHelpers.loginMessage(password, key)).toEqual(valid);
 });
 
+test('#testRebootMessage', () => {
+    const key = '123'
+
+    expect(TibboHelpers.rebootMessage(key)).toEqual(`E|${key}`);
+});
+
+test('#testBuzzMessage', () => {
+    const key = '123'
+
+    expect(TibboHelpers.buzzMessage(key)).toEqual(`B|${key}`);
+});
+
 jest.setTimeout(10000);
 test('#testIterateSend', () => {
     const socket = DgramAsPromised.createSocket("udp4");

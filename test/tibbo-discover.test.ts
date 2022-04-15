@@ -17,7 +17,7 @@ test('#testInstances', () => {
     expect(discover.sendBroadcastMessage).toBeInstanceOf(Function);
 
     // @ts-ignore
-    expect(discover.handleSendDisconnect).toBeInstanceOf(Function);
+    expect(discover.sendSingleAuthMessage).toBeInstanceOf(Function);
 });
 
 test('#testKey', () => {
@@ -99,7 +99,7 @@ test('#testUpdateSettings', () => {
 test('#testReboot', () => {
     const discover = new TibboDiscover();
 
-    return discover.reboot('0.0.0.0').then(result => {
+    return discover.reboot('0.0.0.0', 'password').then(result => {
         expect(result).toBeTruthy();
     })
 });
@@ -107,7 +107,7 @@ test('#testReboot', () => {
 test('#testBuzz', () => {
     const discover = new TibboDiscover();
 
-    return discover.buzz('0.0.0.0').then(result => {
+    return discover.buzz('0.0.0.0', 'password').then(result => {
         expect(result).toBeTruthy();
     })
 });
