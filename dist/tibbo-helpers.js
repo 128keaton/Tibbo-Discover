@@ -11,6 +11,7 @@ const QUERY_BIT = 'X';
 const DELIMIT_BIT = '|';
 const BUZZ_BIT = 'B';
 const REBOOT_BIT = 'E';
+const INIT_BIT = 'I';
 const LOGIN_BIT = 'L';
 const UPDATE_SETTING_BIT = 'S';
 // Response bits
@@ -64,6 +65,9 @@ class TibboHelpers {
     }
     static rebootMessage(key) {
         return `${REBOOT_BIT}${DELIMIT_BIT}${key}`;
+    }
+    static initializeSettingsMessage(key) {
+        return `${INIT_BIT}${DELIMIT_BIT}${key}`;
     }
     static buzzMessage(key) {
         return `${BUZZ_BIT}${DELIMIT_BIT}${key}`;

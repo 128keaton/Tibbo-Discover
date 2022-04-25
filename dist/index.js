@@ -20,3 +20,5 @@ __exportStar(require("./tibbo-discover"), exports);
 __exportStar(require("./tibbo-helpers"), exports);
 /* istanbul ignore next */
 __exportStar(require("./tibbo-types"), exports);
+/* istanbul ignore next */
+__exportStar(require("./tibbo-device-server"), exports);

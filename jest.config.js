@@ -5,7 +5,8 @@ module.exports = {
     coverageDirectory: 'test/coverage',
     testRegex: [
         '/test/tibbo-helpers.test.ts',
-        '/test/tibbo-discover.test.ts'
+        '/test/tibbo-discover.test.ts',
+        '/test/tibbo-device-server.test.ts'
     ],
     testEnvironment: 'node',
     moduleFileExtensions: ['js', 'ts'],

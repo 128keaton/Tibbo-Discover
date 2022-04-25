@@ -8,6 +8,7 @@ test('#testInstances', () => {
     expect(TibboHelpers.processLoginResponse).toBeInstanceOf(Function);
     expect(TibboHelpers.processSettingResponse).toBeInstanceOf(Function);
     expect(TibboHelpers.queryMessage).toBeInstanceOf(Function);
+    expect(TibboHelpers.initializeSettingsMessage).toBeInstanceOf(Function);
     expect(TibboHelpers.updateSettingMessage).toBeInstanceOf(Function);
     expect(TibboHelpers.loginMessage).toBeInstanceOf(Function);
     expect(TibboHelpers.getMacAddress).toBeInstanceOf(Function);
@@ -101,6 +102,12 @@ test('#testBuzzMessage', () => {
     const key = '123'
 
     expect(TibboHelpers.buzzMessage(key)).toEqual(`B|${key}`);
+});
+
+test('#testInitializeSettingsMessage', () => {
+    const key = '123'
+
+    expect(TibboHelpers.initializeSettingsMessage(key)).toEqual(`I|${key}`);
 });
 
 jest.setTimeout(10000);
