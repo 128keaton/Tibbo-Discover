@@ -162,6 +162,7 @@ export class TibboDeviceServer {
 
                         socket.setBroadcast(true);
 
+                        console.log('sending', encodedMessage)
                         return socket.send(encodedMessage, 0, encodedMessage.length, TIBBO_BROADCAST_PORT, ipAddress);
                     }).catch(() => resolve(false))
                 }
@@ -172,7 +173,7 @@ export class TibboDeviceServer {
                 if (denied) {
                     return {message: 'Access denied'};
                 }
-                console.log(packet);
+                console.log(packet, 'or nothing');
 
                 if (packet) {
                     return {message: 'Success', data: packet.msg.toString()};
