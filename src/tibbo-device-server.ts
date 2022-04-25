@@ -147,7 +147,7 @@ export class TibboDeviceServer {
         const signal = ac.signal;
 
         return new Promise(resolve => {
-            setTimeout(1000, 'timeout', {signal}).then(() => {
+            setTimeout(2000, 'timeout', {signal}).then(() => {
                 Promise.all([this.stop(), socket.close()])
                     .catch(() => resolve({message: 'Success'}))
                     .then(() => resolve({message: 'Success'}))
