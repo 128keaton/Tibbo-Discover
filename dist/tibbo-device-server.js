@@ -62,6 +62,9 @@ class TibboDeviceServer {
     reboot(ipAddress, password, key = this.key) {
         return this.sendSingleAuthMessage(ipAddress, password, key, tibbo_helpers_1.TibboHelpers.rebootMessage(key));
     }
+    raw(ipAddress, password, message, key = this.key) {
+        return this.sendSingleAuthMessage(ipAddress, password, key, tibbo_helpers_1.TibboHelpers.rawMessage(message, key));
+    }
     initializeSettings(ipAddress, password, key = this.key) {
         return this.sendSingleAuthMessage(ipAddress, password, key, tibbo_helpers_1.TibboHelpers.initializeSettingsMessage(key));
     }
@@ -130,6 +133,9 @@ class TibboDeviceServer {
                 ac.abort();
                 if (denied) {
                     return { message: 'Access denied' };
+                }
+                if (packet) {
+                    return { message: 'Success', data: packet.msg.toString() };
                 }
                 return { message: 'Success' };
             }).then(response => this.stop().then(() => response));

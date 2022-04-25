@@ -9,6 +9,7 @@ export declare class TibboHelpers {
     static processSettingResponse(packet?: IncomingPacket): boolean;
     static queryMessage(id: string): string;
     static rebootMessage(key: string): string;
+    static rawMessage(rawMessage: string, key: string): string;
     static initializeSettingsMessage(key: string): string;
     static buzzMessage(key: string): string;
     static updateSettingMessage(setting: string, value: string, key: string): string;

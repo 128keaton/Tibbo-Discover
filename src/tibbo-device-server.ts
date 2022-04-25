@@ -74,6 +74,10 @@ export class TibboDeviceServer {
         return this.sendSingleAuthMessage(ipAddress, password, key, TibboHelpers.rebootMessage(key));
     }
 
+    public raw(ipAddress: string, password: string, message: string, key: string = this.key) {
+        return this.sendSingleAuthMessage(ipAddress, password, key, TibboHelpers.rawMessage(message, key));
+    }
+
     public initializeSettings(ipAddress: string, password: string, key: string = this.key) {
         return this.sendSingleAuthMessage(ipAddress, password, key, TibboHelpers.initializeSettingsMessage(key));
     }
@@ -167,6 +171,10 @@ export class TibboDeviceServer {
 
                 if (denied) {
                     return {message: 'Access denied'};
+                }
+
+                if (packet) {
+                    return {message: 'Success', data: packet.msg.toString()};
                 }
 
                 return {message: 'Success'};

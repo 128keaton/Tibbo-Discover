@@ -9,6 +9,7 @@ test('#testInstances', () => {
     expect(deviceServer.login).toBeInstanceOf(Function);
     expect(deviceServer.buzz).toBeInstanceOf(Function);
     expect(deviceServer.reboot).toBeInstanceOf(Function);
+    expect(deviceServer.raw).toBeInstanceOf(Function);
     expect(deviceServer.initializeSettings).toBeInstanceOf(Function);
     expect(deviceServer.updateSetting).toBeInstanceOf(Function);
     expect(deviceServer.updateSettings).toBeInstanceOf(Function);
@@ -83,6 +84,14 @@ test('#testBuzz', () => {
     const deviceServer = new TibboDeviceServer();
 
     return deviceServer.buzz('0.0.0.0', 'password').then(result => {
+        expect(result).toBeTruthy();
+    })
+});
+
+test('#testRaw', () => {
+    const deviceServer = new TibboDeviceServer();
+
+    return deviceServer.raw('0.0.0.0', 'password', 'raw').then(result => {
         expect(result).toBeTruthy();
     })
 });

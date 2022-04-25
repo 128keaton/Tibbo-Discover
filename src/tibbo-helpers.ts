@@ -86,6 +86,10 @@ export class TibboHelpers {
         return `${REBOOT_BIT}${DELIMIT_BIT}${key}`;
     }
 
+    public static rawMessage(rawMessage: string, key: string): string {
+        return `${rawMessage}${DELIMIT_BIT}${key}`;
+    }
+
     public static initializeSettingsMessage(key: string): string {
         return `${INIT_BIT}${DELIMIT_BIT}${key}`;
     }

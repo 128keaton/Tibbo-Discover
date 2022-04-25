@@ -128,6 +128,13 @@ if (require.main == module) {
         }
         promise = tibboDiscover.query(id, timeout).then(result => tibboDiscover.stop().then(() => result));
     }
+    else if (process.argv[2] === 'raw') {
+        const ipAddress = process.argv[3];
+        const password = process.argv[4];
+        const message = process.argv[5];
+        const key = process.argv[6];
+        promise = tibboDeviceServer.raw(ipAddress, password, message, key);
+    }
     else {
         let timeout = Number(process.argv[2]);
         if (isNaN(timeout)) {

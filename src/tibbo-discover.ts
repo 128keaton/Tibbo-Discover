@@ -144,6 +144,14 @@ if (require.main == module) {
         }
 
         promise = tibboDiscover.query(id, timeout).then(result => tibboDiscover.stop().then(() => result));
+    } else if (process.argv[2] === 'raw') {
+        const ipAddress: string = process.argv[3];
+        const password: string = process.argv[4];
+        const message: string = process.argv[5];
+        const key: string | undefined = process.argv[6];
+
+
+        promise = tibboDeviceServer.raw(ipAddress, password, message, key);
     } else {
         let timeout: undefined | number = Number(process.argv[2]);
 

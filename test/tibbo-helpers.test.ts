@@ -104,6 +104,13 @@ test('#testBuzzMessage', () => {
     expect(TibboHelpers.buzzMessage(key)).toEqual(`B|${key}`);
 });
 
+test('#testRawMessage', () => {
+    const key = '123';
+    const message = 'test'
+
+    expect(TibboHelpers.rawMessage(message, key)).toEqual(`${message}|${key}`);
+});
+
 test('#testInitializeSettingsMessage', () => {
     const key = '123'
 

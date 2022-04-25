@@ -66,6 +66,9 @@ class TibboHelpers {
     static rebootMessage(key) {
         return `${REBOOT_BIT}${DELIMIT_BIT}${key}`;
     }
+    static rawMessage(rawMessage, key) {
+        return `${rawMessage}${DELIMIT_BIT}${key}`;
+    }
     static initializeSettingsMessage(key) {
         return `${INIT_BIT}${DELIMIT_BIT}${key}`;
     }
