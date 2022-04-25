@@ -10,6 +10,7 @@ test('#testInstances', () => {
     expect(deviceServer.buzz).toBeInstanceOf(Function);
     expect(deviceServer.reboot).toBeInstanceOf(Function);
     expect(deviceServer.raw).toBeInstanceOf(Function);
+    expect(deviceServer.readSetting).toBeInstanceOf(Function);
     expect(deviceServer.initializeSettings).toBeInstanceOf(Function);
     expect(deviceServer.updateSetting).toBeInstanceOf(Function);
     expect(deviceServer.updateSettings).toBeInstanceOf(Function);
@@ -103,4 +104,14 @@ test('#testInitializeSettings', () => {
         expect(result).toBeTruthy();
     })
 });
+
+jest.setTimeout(50000);
+test('#testGetSetting', () => {
+    const deviceServer = new TibboDeviceServer();
+
+    return deviceServer.readSetting('0.0.0.0', 'password', 'API').then(result => {
+        expect(result).toBeNull();
+    })
+});
+
 

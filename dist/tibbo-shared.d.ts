@@ -1,2 +1,3 @@
 export declare const TIBBO_BROADCAST_PORT = 65535;
 export declare const TIBBO_BROADCAST_ADDR = "255.255.255.255";
+export declare const PACKAGE_VERSION: any;

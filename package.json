@@ -33,10 +33,12 @@
   "files": [
     "dist"
   ],
-  "engines" : {
-    "node" : ">=16.0.0"
+  "engines": {
+    "node": ">=16.0.0"
   },
   "dependencies": {
+    "commander": "^9.2.0",
+    "conf": "^10.1.2",
     "dgram-as-promised": "^5.0.1"
   }
 }

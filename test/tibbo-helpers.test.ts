@@ -111,6 +111,15 @@ test('#testRawMessage', () => {
     expect(TibboHelpers.rawMessage(message, key)).toEqual(`${message}|${key}`);
 });
 
+test('#testStripSettingsResponseMessage', () => {
+    const key = 'tibbo123';
+    const raw = {
+        data: 'Ahttp://192.168.1.52:4200/api|tibbo123'
+    }
+
+    expect(TibboHelpers.stripSettingsResponse(key, raw)).toEqual(`http://192.168.1.52:4200/api`);
+});
+
 test('#testInitializeSettingsMessage', () => {
     const key = '123'
 

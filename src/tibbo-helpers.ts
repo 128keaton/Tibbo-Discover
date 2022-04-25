@@ -17,6 +17,7 @@ const REBOOT_BIT = 'E';
 const INIT_BIT = 'I';
 const LOGIN_BIT = 'L';
 const UPDATE_SETTING_BIT = 'S';
+const READ_SETTING_BIT = 'G';
 
 // Response bits
 const ERR_BIT = 'C';
@@ -90,6 +91,10 @@ export class TibboHelpers {
         return `${rawMessage}${DELIMIT_BIT}${key}`;
     }
 
+    public static getSettingMessage(setting: string, key: string): string {
+        return `${READ_SETTING_BIT}${setting}${DELIMIT_BIT}${key}`;
+    }
+
     public static initializeSettingsMessage(key: string): string {
         return `${INIT_BIT}${DELIMIT_BIT}${key}`;
     }
@@ -112,6 +117,14 @@ export class TibboHelpers {
 
         if (!!matches && matches.length > 0) {
             return matches[0];
+        }
+
+        return null;
+    }
+
+    public static stripSettingsResponse(key: string, rawResponse?: {data?: string}): string|null {
+        if (!!rawResponse && rawResponse.data) {
+            return rawResponse.data.slice(1, rawResponse.data.length).replace(`${DELIMIT_BIT}${key}`, '');
         }
 
         return null;

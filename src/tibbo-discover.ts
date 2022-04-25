@@ -3,12 +3,10 @@ import {setTimeout} from 'timers/promises';
 import DgramAsPromised, {SocketAsPromised} from "dgram-as-promised";
 import {Buffer} from "buffer";
 import {TibboHelpers} from "./tibbo-helpers";
-import {
-    TibboDevice,
-    TibboDeviceSetting,
-} from "./tibbo-types";
-import {TIBBO_BROADCAST_ADDR, TIBBO_BROADCAST_PORT} from "./tibbo-shared";
-import {TibboDeviceServer} from "./tibbo-device-server";
+import {TibboDevice} from "./tibbo-types";
+import {PACKAGE_VERSION, TIBBO_BROADCAST_ADDR, TIBBO_BROADCAST_PORT} from "./tibbo-shared";
+import {Option, program} from "commander";
+
 
 export class TibboDiscover {
 
@@ -87,80 +85,44 @@ export class TibboDiscover {
 /* istanbul ignore if */
 if (require.main == module) {
     const tibboDiscover = new TibboDiscover();
-    const tibboDeviceServer = new TibboDeviceServer();
-    let promise: Promise<any>;
 
-    if (process.argv[2] === 'login') {
-        const ipAddress: string = process.argv[3];
-        const password: string = process.argv[4];
+    program
+        .name('tibbo-discover')
+        .description('CLI to discover Tibbo devices on the network')
+        .version(PACKAGE_VERSION);
 
-        promise = tibboDeviceServer.login(ipAddress, password);
-    } else if (process.argv[2] === 'setting') {
-        const ipAddress: string = process.argv[3];
-        const password: string = process.argv[4];
-        const setting: string = process.argv[5];
-        const value: string = process.argv[6];
+    program
+        .command('query')
+        .description('Query a specific device on the network')
+        .argument('<id>', 'ID of Tibbo device to query')
+        .addOption(new Option('-t, --timeout <delay>', 'timeout in milliseconds').default(4000, 'four seconds'))
+        .action((id, strTimeout) => {
+            let timeout: undefined | number = Number(strTimeout);
 
-        promise = tibboDeviceServer.updateSetting(setting, value, ipAddress, password);
-    } else if (process.argv[2] === 'settings') {
-        const ipAddress: string = process.argv[3];
-        const password: string = process.argv[4];
-        const rawSettings: string[] = process.argv[5].split(',');
-        const settings: TibboDeviceSetting[] = [];
-
-        let currentSetting: string;
-        rawSettings.forEach((value, index) => {
-            if (index % 2 === 0) {
-                currentSetting = value;
-            } else {
-                settings.push({
-                    settingName: currentSetting,
-                    settingValue: value
-                })
+            if (isNaN(timeout)) {
+                timeout = undefined;
             }
+
+            return tibboDiscover.query(id, timeout)
+                .then(result => tibboDiscover.stop().then(() => result))
+                .then(result => console.log(JSON.stringify(result, null, 2)));
         });
 
+    program
+        .command('scan')
+        .description('Scan for devices on the network')
+        .addOption(new Option('-t, --timeout <delay>', 'timeout in milliseconds').default(4000, 'four seconds'))
+        .action((strTimeout) => {
+            let timeout: undefined | number = Number(strTimeout);
 
-        promise = tibboDeviceServer.updateSettings(settings, ipAddress, password);
-    } else if (process.argv[2] === 'buzz') {
-        const ipAddress: string = process.argv[3];
-        const password: string = process.argv[4];
-        const key: string | undefined = process.argv[5];
+            if (isNaN(timeout)) {
+                timeout = undefined;
+            }
 
-        promise = tibboDeviceServer.buzz(ipAddress, password, key);
-    } else if (process.argv[2] === 'reboot') {
-        const ipAddress: string = process.argv[3];
-        const password: string = process.argv[4];
-        const key: string | undefined = process.argv[5];
+            return tibboDiscover.scan(timeout)
+                .then(result => tibboDiscover.stop().then(() => result))
+                .then(result => console.log(JSON.stringify(result, null, 2)));
+        });
 
-        promise = tibboDeviceServer.reboot(ipAddress, password, key);
-    } else if (process.argv[2] === 'query') {
-        const id: string = process.argv[3];
-
-        let timeout: undefined | number = Number(process.argv[4]);
-
-        if (isNaN(timeout)) {
-            timeout = undefined;
-        }
-
-        promise = tibboDiscover.query(id, timeout).then(result => tibboDiscover.stop().then(() => result));
-    } else if (process.argv[2] === 'raw') {
-        const ipAddress: string = process.argv[3];
-        const password: string = process.argv[4];
-        const message: string = process.argv[5];
-        const key: string | undefined = process.argv[6];
-
-
-        promise = tibboDeviceServer.raw(ipAddress, password, message, key);
-    } else {
-        let timeout: undefined | number = Number(process.argv[2]);
-
-        if (isNaN(timeout)) {
-            timeout = undefined;
-        }
-
-        promise = tibboDiscover.scan(timeout);
-    }
-
-    promise.then(result => console.log(JSON.stringify(result, null, 2)));
+    program.parse();
 }
