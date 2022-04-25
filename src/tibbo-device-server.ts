@@ -173,7 +173,7 @@ export class TibboDeviceServer {
                 if (denied) {
                     return {message: 'Access denied'};
                 }
-                console.log(packet, 'or nothing');
+                console.log(packet?.msg.toString(), 'or nothing');
 
                 if (packet) {
                     return {message: 'Success', data: packet.msg.toString()};
