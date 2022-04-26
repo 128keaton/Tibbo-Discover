@@ -13,6 +13,8 @@ test('#testInstances', () => {
     expect(TibboHelpers.loginMessage).toBeInstanceOf(Function);
     expect(TibboHelpers.getMacAddress).toBeInstanceOf(Function);
     expect(TibboHelpers.iterateSend).toBeInstanceOf(Function);
+    expect(TibboHelpers.debugPrint).toBeInstanceOf(Function);
+    expect(TibboHelpers.hidePassword).toBeInstanceOf(Function);
 });
 
 
@@ -125,6 +127,17 @@ test('#testInitializeSettingsMessage', () => {
 
     expect(TibboHelpers.initializeSettingsMessage(key)).toEqual(`I|${key}`);
 });
+
+
+test('#testDebugPrinting', () => {
+    expect(TibboHelpers.debugPrint('success', 'test')).toBeUndefined();
+});
+
+test('#testHidePassword', () => {
+    expect(TibboHelpers.hidePassword('tibbo123')).toEqual('****o123');
+    expect(TibboHelpers.hidePassword('tibb')).toEqual('**bb');
+});
+
 
 jest.setTimeout(10000);
 test('#testIterateSend', () => {

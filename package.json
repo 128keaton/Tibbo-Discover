@@ -1,6 +1,6 @@
 {
   "name": "tibbo-discover",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Discover Tibbo devices on the network",
   "repository": "https://github.com/128keaton/Tibbo-Discover",
   "main": "dist/tibbo-discover.js",
@@ -37,8 +37,8 @@
     "node": ">=16.0.0"
   },
   "dependencies": {
+    "chalk": "^4.1.2",
     "commander": "^9.2.0",
-    "conf": "^10.1.2",
     "dgram-as-promised": "^5.0.1"
   }
 }

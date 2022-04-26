@@ -1,7 +1,7 @@
 import {IncomingPacket, SocketAsPromised} from "dgram-as-promised";
 import {Buffer} from "buffer";
 import {TibboDevice} from "./tibbo-types";
-
+import chalk from 'chalk';
 
 // Regex Patterns
 const MAC_REGEX = /\[\d..\.\d..\.\d..\.\d..\.\d..\.\d..]/;
@@ -27,7 +27,6 @@ const DENY_BIT = 'D';
 
 
 export class TibboHelpers {
-
     public static get discoverMessage() {
         return `${START_BIT}${DISCOVER_BIT}`;
     }
@@ -122,7 +121,7 @@ export class TibboHelpers {
         return null;
     }
 
-    public static stripSettingsResponse(key: string, rawResponse?: {data?: string}): string|null {
+    public static stripSettingsResponse(key: string, rawResponse?: { data?: string }): string | null {
         if (!!rawResponse && rawResponse.data) {
             return rawResponse.data.slice(1, rawResponse.data.length).replace(`${DELIMIT_BIT}${key}`, '');
         }
@@ -146,6 +145,33 @@ export class TibboHelpers {
         const message = packet.msg.toString();
 
         return message === `${DENY_BIT}${DELIMIT_BIT}` || message === DENY_BIT;
+    }
+
+    public static hidePassword(password: string): string {
+        const length = (password.length > 4 ? 4 : ((password.length - 2)));
+        return password.slice(0, -(length)).replace(/./g, '*') + password.slice(-(length));
+    }
+
+    public static debugPrint(color: 'success' | 'info' | 'error' | 'warning' | 'none' = 'none', ...data: any[]) {
+        const log = console.log;
+        const logData = chalk.magenta('[Tibbo Discover] - ') + data.join(' ');
+        switch (color) {
+            case 'success':
+                log(chalk.green(logData));
+                break
+            case 'info':
+                log(chalk.cyanBright(logData));
+                break;
+            case 'error':
+                log(chalk.redBright(logData));
+                break;
+            case 'warning':
+                log(chalk.yellowBright(logData));
+                break;
+            case "none":
+                log(data);
+                break;
+        }
     }
 
 

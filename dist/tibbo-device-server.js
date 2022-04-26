@@ -11,12 +11,20 @@ const promises_1 = require("timers/promises");
 const tibbo_shared_1 = require("./tibbo-shared");
 const commander_1 = require("commander");
 class TibboDeviceServer {
-    constructor(key) {
+    constructor(debug = false, key) {
         this.activeSockets = [];
+        this._debug = false;
         this.key = 'tibbo123';
         if (!!key && key.length) {
             this.key = key;
         }
+    }
+    get debug() {
+        return this._debug;
+    }
+    set debug(debug) {
+        this.debugPrint('info', 'Enabling debug printing...');
+        this._debug = debug;
     }
     login(ipAddress, password, key = this.key, timeout = 3000) {
         const socket = dgram_as_promised_1.default.createSocket("udp4");
@@ -24,6 +32,8 @@ class TibboDeviceServer {
         const encodedMessage = buffer_1.Buffer.from(message);
         const abortController = new AbortController();
         const signal = abortController.signal;
+        tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Logging into Tibbo at', ipAddress, 'with key', key, 'and password', tibbo_helpers_1.TibboHelpers.hidePassword(password), 'with timeout', timeout);
+        tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Raw login message:', message);
         return new Promise((resolve) => {
             let didResolve = false;
             this.setupLoginTimeout(resolve, key, signal, socket, timeout);
@@ -45,22 +55,28 @@ class TibboDeviceServer {
         });
     }
     buzz(ipAddress, password, key = this.key) {
+        tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Buzzing Tibbo at', ipAddress, 'with key', key, 'and password', tibbo_helpers_1.TibboHelpers.hidePassword(password));
         return this.sendSingleAuthMessage(ipAddress, password, key, tibbo_helpers_1.TibboHelpers.buzzMessage(key));
     }
     reboot(ipAddress, password, key = this.key) {
+        tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Rebooting Tibbo at', ipAddress, 'with key', key, 'and password', tibbo_helpers_1.TibboHelpers.hidePassword(password));
         return this.sendSingleAuthMessage(ipAddress, password, key, tibbo_helpers_1.TibboHelpers.rebootMessage(key), true);
     }
     raw(ipAddress, password, message, key = this.key) {
+        tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Running raw command on Tibbo at', ipAddress, 'with key', key, 'and password', tibbo_helpers_1.TibboHelpers.hidePassword(password), 'with command:', message);
         return this.sendSingleAuthMessage(ipAddress, password, key, tibbo_helpers_1.TibboHelpers.rawMessage(message, key));
     }
     readSetting(ipAddress, password, setting, key = this.key) {
+        tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Reading setting named', setting, 'on Tibbo at', ipAddress, 'with key', key, 'and password', tibbo_helpers_1.TibboHelpers.hidePassword(password));
         return this.sendSingleAuthMessage(ipAddress, password, key, tibbo_helpers_1.TibboHelpers.getSettingMessage(setting, key), false, 10000)
             .then(response => tibbo_helpers_1.TibboHelpers.stripSettingsResponse(key, response));
     }
     initializeSettings(ipAddress, password, key = this.key) {
+        tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Initializing settings on Tibbo at', ipAddress, 'with key', key, 'and password', tibbo_helpers_1.TibboHelpers.hidePassword(password));
         return this.sendSingleAuthMessage(ipAddress, password, key, tibbo_helpers_1.TibboHelpers.initializeSettingsMessage(key));
     }
     async updateSetting(setting, value, ipAddress, password) {
+        tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Updating setting named', setting, 'with value', value, 'on Tibbo at', ipAddress, 'and password', tibbo_helpers_1.TibboHelpers.hidePassword(password));
         const settings = [
             {
                 settingValue: value,
@@ -74,6 +90,7 @@ class TibboDeviceServer {
         if (!didAuth.success) {
             return didAuth;
         }
+        tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Updating settings named on Tibbo at', ipAddress, 'and password', tibbo_helpers_1.TibboHelpers.hidePassword(password), 'with values', settings);
         const socket = dgram_as_promised_1.default.createSocket("udp4");
         const settingMessages = settings.map(setting => tibbo_helpers_1.TibboHelpers.updateSettingMessage(setting.settingName, setting.settingValue, didAuth.key))
             .map(string => buffer_1.Buffer.from(string));
@@ -88,6 +105,10 @@ class TibboDeviceServer {
         }).then(results => socket.close().then(() => results));
     }
     stop() {
+        if (this.activeSockets.length === 0) {
+            return new Promise(resolve => resolve());
+        }
+        tibbo_helpers_1.TibboHelpers.debugPrint('warning', 'Stop called on TibboDeviceServer instance');
         const finished = () => {
             this.activeSockets.forEach(socket => socket.unref());
             this.activeSockets = [];
@@ -95,7 +116,10 @@ class TibboDeviceServer {
         };
         return Promise.all(this.activeSockets.map(socket => socket.close()))
             .then(() => finished())
-            .catch(() => finished());
+            .catch((err) => {
+            tibbo_helpers_1.TibboHelpers.debugPrint('error', 'Error caught on closing sockets:', err);
+            return finished();
+        });
     }
     static handleTimeout(expectTimeout, resolver) {
         if (expectTimeout) {
@@ -114,6 +138,7 @@ class TibboDeviceServer {
     }
     handleLoginResponse(result, encodedMessage, ipAddress, socket, resolver) {
         if (result.success) {
+            tibbo_helpers_1.TibboHelpers.debugPrint('success', 'Processing login response', result.message, 'responding with', encodedMessage.toString('utf8'));
             return socket.bind()
                 .then(() => this.appendSocket(socket))
                 .then(socket => socket.send(encodedMessage, 0, encodedMessage.length, tibbo_shared_1.TIBBO_BROADCAST_PORT, ipAddress))
@@ -127,7 +152,13 @@ class TibboDeviceServer {
         (0, promises_1.setTimeout)(timeout, 'timeout', { signal })
             .then(() => Promise.all([this.stop(), socket.close()])
             .then(() => resolver({ key, message: 'ERR_TIMEOUT', success: false })))
-            .catch(() => resolver({ key, message: 'ERR_TIMEOUT', success: false }));
+            .catch((err) => {
+            let errorCode = 'ERR_TIMEOUT';
+            if (!!err && err.hasOwnProperty('code')) {
+                errorCode = err['code'];
+            }
+            resolver({ key, message: errorCode, success: false });
+        });
     }
     setupTimeout(resolver, signal, socket, timeout = 2000, expectTimeout = false) {
         (0, promises_1.setTimeout)(timeout, 'timeout', { signal })
@@ -141,6 +172,7 @@ class TibboDeviceServer {
         const encodedMessage = buffer_1.Buffer.from(message);
         const abortController = new AbortController();
         const signal = abortController.signal;
+        tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Sending single authenticated message to IP', ipAddress, 'with password', tibbo_helpers_1.TibboHelpers.hidePassword(password), 'and key', key, 'with message contents:', message);
         return new Promise(resolve => {
             this.setupTimeout(resolve, signal, socket, timeout, expectTimeout);
             this.login(ipAddress, password, key, timeout)
@@ -150,18 +182,27 @@ class TibboDeviceServer {
                 .then(response => this.stop().then(() => resolve(response)));
         });
     }
+    debugPrint(color = 'none', ...data) {
+        if (this.debug) {
+            tibbo_helpers_1.TibboHelpers.debugPrint(color, data);
+        }
+    }
     static handleGenericPacket(abortController, packet) {
         const denied = tibbo_helpers_1.TibboHelpers.checkIfDenied(packet);
+        let data = undefined;
         abortController.abort();
         if (denied) {
+            tibbo_helpers_1.TibboHelpers.debugPrint('error', 'Access denied from handleGenericPacket');
             return { message: 'ACCESS_DENIED' };
         }
         if (packet) {
-            return { message: 'Success', data: packet.msg.toString() };
+            data = packet.msg.toString();
+            tibbo_helpers_1.TibboHelpers.debugPrint('success', 'Data from handleGenericPacket:', data);
         }
-        return { message: 'SUCCESS' };
+        return { message: 'SUCCESS', data };
     }
     static handleDenied(resolver) {
+        tibbo_helpers_1.TibboHelpers.debugPrint('error', 'Access denied from handleDenied');
         resolver({ message: 'ACCESS_DENIED' });
     }
 }
@@ -172,40 +213,53 @@ if (require.main == module) {
     commander_1.program
         .name('tibbo-device-server')
         .description('CLI to modify DS-Tibbo devices on the network')
-        .version(tibbo_shared_1.PACKAGE_VERSION);
+        .version(tibbo_shared_1.PACKAGE_VERSION)
+        .option('-d, --debug', 'output extra debugging');
     commander_1.program
         .command('login')
         .description('Login to a Tibbo DS on the network')
         .argument('<ipAddress>', 'IP address of Tibbo device to login into')
         .argument('<password>', 'Password of the Tibbo device to login into')
-        .action((ipAddress, password) => tibboDeviceServer.login(ipAddress, password)
-        .then(result => tibboDeviceServer.stop().then(() => result))
-        .then(result => console.log(JSON.stringify(result, null, 2))));
+        .action((ipAddress, password) => {
+        tibboDeviceServer.debug = commander_1.program.opts()['debug'];
+        tibboDeviceServer.login(ipAddress, password)
+            .then(result => tibboDeviceServer.stop().then(() => result))
+            .then(result => console.log(JSON.stringify(result, null, 2)));
+    });
     commander_1.program
         .command('buzz')
         .description('Buzz a Tibbo DS on the network')
         .argument('<ipAddress>', 'IP address of Tibbo device to buzz')
         .argument('<password>', 'Password of the Tibbo device to buzz')
-        .action((ipAddress, password) => tibboDeviceServer.buzz(ipAddress, password)
-        .then(result => tibboDeviceServer.stop().then(() => result))
-        .then(result => console.log(JSON.stringify(result, null, 2))));
+        .action((ipAddress, password) => {
+        tibboDeviceServer.debug = commander_1.program.opts()['debug'];
+        tibboDeviceServer.buzz(ipAddress, password)
+            .then(result => tibboDeviceServer.stop().then(() => result))
+            .then(result => console.log(JSON.stringify(result, null, 2)));
+    });
     commander_1.program
         .command('reboot')
         .description('Reboot a Tibbo DS on the network')
         .argument('<ipAddress>', 'IP address of Tibbo device to reboot')
         .argument('<password>', 'Password of the Tibbo device to reboot')
-        .action((ipAddress, password) => tibboDeviceServer.reboot(ipAddress, password)
-        .then(result => tibboDeviceServer.stop().then(() => result))
-        .then(result => console.log(JSON.stringify(result, null, 2))));
+        .action((ipAddress, password) => {
+        tibboDeviceServer.debug = commander_1.program.opts()['debug'];
+        tibboDeviceServer.reboot(ipAddress, password)
+            .then(result => tibboDeviceServer.stop().then(() => result))
+            .then(result => console.log(JSON.stringify(result, null, 2)));
+    });
     commander_1.program
         .command('raw')
         .description('Send a raw command to a Tibbo DS on the network')
         .argument('<ipAddress>', 'IP address of Tibbo device to send the raw command rto')
         .argument('<password>', 'Password of the Tibbo device to send the raw command to')
         .argument('<raw>', 'The raw command')
-        .action((ipAddress, password, raw) => tibboDeviceServer.raw(ipAddress, password, raw)
-        .then(result => tibboDeviceServer.stop().then(() => result))
-        .then(result => console.log(JSON.stringify(result, null, 2))));
+        .action((ipAddress, password, raw) => {
+        tibboDeviceServer.debug = commander_1.program.opts()['debug'];
+        tibboDeviceServer.raw(ipAddress, password, raw)
+            .then(result => tibboDeviceServer.stop().then(() => result))
+            .then(result => console.log(JSON.stringify(result, null, 2)));
+    });
     const setting = commander_1.program.command('setting');
     setting.command('set')
         .description('Update a setting on the Tibbo device')
@@ -213,27 +267,34 @@ if (require.main == module) {
         .argument('<password>', 'Password of the Tibbo device to login into')
         .argument('<setting>', 'Setting name on the Tibbo device')
         .argument('<value>', 'New value of the setting')
-        .action((ipAddress, password, setting, value) => tibboDeviceServer.updateSetting(setting, value, ipAddress, password)
-        .then(result => tibboDeviceServer.stop().then(() => result))
-        .then(result => console.log(JSON.stringify(result, null, 2))));
+        .action((ipAddress, password, setting, value) => {
+        tibboDeviceServer.debug = commander_1.program.opts()['debug'];
+        tibboDeviceServer.updateSetting(setting, value, ipAddress, password)
+            .then(result => tibboDeviceServer.stop().then(() => result))
+            .then(result => console.log(JSON.stringify(result, null, 2)));
+    });
     setting.command('get')
         .description('Update a setting on the Tibbo device')
         .argument('<ipAddress>', 'IP address of Tibbo device to login into')
         .argument('<password>', 'Password of the Tibbo device to login into')
         .argument('<setting>', 'Setting name on the Tibbo device')
-        .action((ipAddress, password, setting) => tibboDeviceServer.readSetting(ipAddress, password, setting)
-        .then(result => tibboDeviceServer.stop().then(() => {
-        const object = {};
-        object[setting] = result;
-        return object;
-    }))
-        .then(result => console.log(JSON.stringify(result, null, 2))));
+        .action((ipAddress, password, setting) => {
+        tibboDeviceServer.debug = commander_1.program.opts()['debug'];
+        tibboDeviceServer.readSetting(ipAddress, password, setting)
+            .then(result => tibboDeviceServer.stop().then(() => {
+            const object = {};
+            object[setting] = result;
+            return object;
+        }))
+            .then(result => console.log(JSON.stringify(result, null, 2)));
+    });
     setting.command('set-multiple')
         .description('Update a setting on the Tibbo device')
         .argument('<ipAddress>', 'IP address of Tibbo device to login into')
         .argument('<password>', 'Password of the Tibbo device to login into')
         .argument('<settings>', 'Comma-separated values to set')
         .action((ipAddress, password, csv) => {
+        tibboDeviceServer.debug = commander_1.program.opts()['debug'];
         const rawSettings = csv.split(',');
         const settings = [];
         let currentSetting;

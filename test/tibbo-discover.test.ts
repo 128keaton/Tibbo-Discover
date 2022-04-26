@@ -1,4 +1,5 @@
 import {TibboDiscover} from "../dist";
+import {TibboDeviceServer} from "../src";
 
 
 test('#testInstances', () => {
@@ -43,4 +44,16 @@ test('#testStop', () => {
     return discover.stop().then(devices => {
         expect(devices).toBeInstanceOf(Array);
     })
+});
+
+
+test('#testDebugPrinting', () => {
+    const discover = new TibboDiscover();
+
+    expect(discover.debug).toBe(false);
+    discover.debug = true;
+    expect(discover.debug).toBe(true);
+
+    // @ts-ignore
+    expect(discover.debugPrint('success', 'success')).toBeUndefined();
 });

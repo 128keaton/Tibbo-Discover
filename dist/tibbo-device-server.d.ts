@@ -1,8 +1,11 @@
 import { TibboDeviceLoginResponse, TibboDeviceSetting, TibboDeviceUpdateSettingResponse } from "./tibbo-types";
 export declare class TibboDeviceServer {
     private activeSockets;
+    private _debug;
     private readonly key;
-    constructor(key?: string);
+    get debug(): boolean;
+    set debug(debug: boolean);
+    constructor(debug?: boolean, key?: string);
     login(ipAddress: string, password: string, key?: string, timeout?: number): Promise<TibboDeviceLoginResponse>;
     buzz(ipAddress: string, password: string, key?: string): Promise<{
         message?: any;
@@ -30,6 +33,7 @@ export declare class TibboDeviceServer {
     private setupLoginTimeout;
     private setupTimeout;
     private sendSingleAuthMessage;
+    private debugPrint;
     private static handleGenericPacket;
     private static handleDenied;
 }

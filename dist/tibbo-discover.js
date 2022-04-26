@@ -15,8 +15,17 @@ class TibboDiscover {
     constructor() {
         this.devices = {};
         this.activeSockets = [];
+        this._debug = false;
+    }
+    get debug() {
+        return this._debug;
+    }
+    set debug(debug) {
+        this.debugPrint('info', 'Enabling debug printing...');
+        this._debug = debug;
     }
     scan(timeout = 5000) {
+        tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Scanning for Tibbo devices ');
         return this.sendBroadcastMessage(tibbo_helpers_1.TibboHelpers.discoverMessage).then(() => {
             return new Promise(resolve => {
                 (0, promises_1.setTimeout)(timeout).then(() => {
@@ -26,6 +35,7 @@ class TibboDiscover {
         });
     }
     query(id, timeout = 1500) {
+        tibbo_helpers_1.TibboHelpers.debugPrint('success', 'Querying Tibbo with ID ', id);
         return new Promise(resolve => {
             let didResolve = false;
             this.sendBroadcastMessage(tibbo_helpers_1.TibboHelpers.queryMessage(id))
@@ -43,6 +53,10 @@ class TibboDiscover {
         });
     }
     stop() {
+        if (this.activeSockets.length === 0) {
+            return new Promise(resolve => resolve(Object.values(this.devices)));
+        }
+        tibbo_helpers_1.TibboHelpers.debugPrint('warning', 'Stop called on TibboDiscover instance');
         const finished = () => {
             this.activeSockets.forEach(socket => socket.unref());
             this.activeSockets = [];
@@ -50,17 +64,22 @@ class TibboDiscover {
         };
         return Promise.all(this.activeSockets.map(socket => socket.close()))
             .then(() => finished())
-            .catch(() => finished());
+            .catch((err) => {
+            tibbo_helpers_1.TibboHelpers.debugPrint('error', 'Error caught on closing sockets:', err);
+            return finished();
+        });
     }
     sendBroadcastMessage(message) {
         const socket = dgram_as_promised_1.default.createSocket("udp4");
         const encodedMessage = buffer_1.Buffer.from(message);
+        tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Sending broadcast message', message, 'to', `${tibbo_shared_1.TIBBO_BROADCAST_ADDR}:${tibbo_shared_1.TIBBO_BROADCAST_PORT}`);
         return socket.bind().then(() => {
             this.activeSockets.push(socket);
             socket.setBroadcast(true);
             socket.socket.on('message', (msg) => {
                 const tibboID = tibbo_helpers_1.TibboHelpers.getMacAddress(msg);
                 if (!!tibboID && !this.devices[tibboID]) {
+                    tibbo_helpers_1.TibboHelpers.debugPrint('success', 'New Tibbo found, ID =', tibboID);
                     return this.query(tibboID).then(result => {
                         if (!!result)
                             this.devices[tibboID] = result;
@@ -70,6 +89,11 @@ class TibboDiscover {
             return socket.send(encodedMessage, 0, encodedMessage.length, tibbo_shared_1.TIBBO_BROADCAST_PORT, tibbo_shared_1.TIBBO_BROADCAST_ADDR);
         }).then(() => socket);
     }
+    debugPrint(color = 'none', ...data) {
+        if (this.debug) {
+            tibbo_helpers_1.TibboHelpers.debugPrint(color, data);
+        }
+    }
 }
 exports.TibboDiscover = TibboDiscover;
 /* istanbul ignore if */
@@ -78,13 +102,15 @@ if (require.main == module) {
     commander_1.program
         .name('tibbo-discover')
         .description('CLI to discover Tibbo devices on the network')
-        .version(tibbo_shared_1.PACKAGE_VERSION);
+        .version(tibbo_shared_1.PACKAGE_VERSION)
+        .option('-d, --debug', 'output extra debugging');
     commander_1.program
         .command('query')
         .description('Query a specific device on the network')
         .argument('<id>', 'ID of Tibbo device to query')
         .addOption(new commander_1.Option('-t, --timeout <delay>', 'timeout in milliseconds').default(4000, 'four seconds'))
         .action((id, strTimeout) => {
+        tibboDiscover.debug = commander_1.program.opts()['debug'];
         let timeout = Number(strTimeout);
         if (isNaN(timeout)) {
             timeout = undefined;
@@ -98,6 +124,7 @@ if (require.main == module) {
         .description('Scan for devices on the network')
         .addOption(new commander_1.Option('-t, --timeout <delay>', 'timeout in milliseconds').default(4000, 'four seconds'))
         .action((strTimeout) => {
+        tibboDiscover.debug = commander_1.program.opts()['debug'];
         let timeout = Number(strTimeout);
         if (isNaN(timeout)) {
             timeout = undefined;

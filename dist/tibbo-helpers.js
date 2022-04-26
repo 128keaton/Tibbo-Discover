@@ -1,6 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TibboHelpers = void 0;
+const chalk_1 = __importDefault(require("chalk"));
 // Regex Patterns
 const MAC_REGEX = /\[\d..\.\d..\.\d..\.\d..\.\d..\.\d..]/;
 const BOARD_REGEX = /<.*>/;
@@ -112,6 +116,31 @@ class TibboHelpers {
         }
         const message = packet.msg.toString();
         return message === `${DENY_BIT}${DELIMIT_BIT}` || message === DENY_BIT;
+    }
+    static hidePassword(password) {
+        const length = (password.length > 4 ? 4 : ((password.length - 2)));
+        return password.slice(0, -(length)).replace(/./g, '*') + password.slice(-(length));
+    }
+    static debugPrint(color = 'none', ...data) {
+        const log = console.log;
+        const logData = chalk_1.default.magenta('[Tibbo Discover] - ') + data.join(' ');
+        switch (color) {
+            case 'success':
+                log(chalk_1.default.green(logData));
+                break;
+            case 'info':
+                log(chalk_1.default.cyanBright(logData));
+                break;
+            case 'error':
+                log(chalk_1.default.redBright(logData));
+                break;
+            case 'warning':
+                log(chalk_1.default.yellowBright(logData));
+                break;
+            case "none":
+                log(data);
+                break;
+        }
     }
 }
 exports.TibboHelpers = TibboHelpers;

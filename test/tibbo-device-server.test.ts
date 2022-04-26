@@ -17,12 +17,15 @@ test('#testInstances', () => {
 
     // @ts-ignore
     expect(deviceServer.sendSingleAuthMessage).toBeInstanceOf(Function);
+
+    // @ts-ignore
+    expect(deviceServer.debugPrint).toBeInstanceOf(Function);
 });
 
 test('#testKey', () => {
     const customKey = 'apple123';
     const deviceServer = new TibboDeviceServer();
-    const deviceServerCustom = new TibboDeviceServer(customKey);
+    const deviceServerCustom = new TibboDeviceServer(false, customKey);
 
     // @ts-ignore
     expect(deviceServer.key).toEqual('tibbo123');
@@ -42,7 +45,7 @@ test('#testStop', () => {
 
 test('#testLogin', () => {
     const deviceServer = new TibboDeviceServer();
-    const fakeResponse = {key: 'tibbo123', message: 'ERR_TIMEOUT', success: false};
+    const fakeResponse = {key: 'tibbo123', message: 'ERR_SOCKET_DGRAM_NOT_RUNNING', success: false};
 
     return deviceServer.login('0.0.0.0', 'password').then(response => {
         expect(response).toEqual(fakeResponse);
@@ -51,7 +54,7 @@ test('#testLogin', () => {
 
 test('#testUpdateSetting', () => {
     const deviceServer = new TibboDeviceServer();
-    const fakeResponse = {key: 'tibbo123', message: 'ERR_TIMEOUT', success: false};
+    const fakeResponse = {key: 'tibbo123', message: 'ERR_SOCKET_DGRAM_NOT_RUNNING', success: false};
 
     return deviceServer.updateSetting('API', '12345', '0.0.0.0', 'password').then(response => {
         expect(response).toEqual(fakeResponse);
@@ -60,7 +63,7 @@ test('#testUpdateSetting', () => {
 
 test('#testUpdateSettings', () => {
     const deviceServer = new TibboDeviceServer();
-    const fakeResponse = {key: 'tibbo123', message: 'ERR_TIMEOUT', success: false};
+    const fakeResponse = {key: 'tibbo123', message: 'ERR_SOCKET_DGRAM_NOT_RUNNING', success: false};
     const settings: TibboDeviceSetting[] = [
         {
             settingName: 'API',
@@ -103,6 +106,17 @@ test('#testInitializeSettings', () => {
     return deviceServer.initializeSettings('0.0.0.0', 'password').then(result => {
         expect(result).toBeTruthy();
     })
+});
+
+test('#testDebugPrinting', () => {
+    const deviceServer = new TibboDeviceServer();
+
+    expect(deviceServer.debug).toBe(false);
+    deviceServer.debug = true;
+    expect(deviceServer.debug).toBe(true);
+
+    // @ts-ignore
+    expect(deviceServer.debugPrint('success', 'success')).toBeUndefined();
 });
 
 jest.setTimeout(50000);

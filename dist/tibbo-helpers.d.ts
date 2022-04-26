@@ -21,4 +21,6 @@ export declare class TibboHelpers {
     }): string | null;
     static iterateSend(socket: SocketAsPromised, setting: Buffer, ipAddress: string, port: number): Promise<boolean>;
     static checkIfDenied(packet?: IncomingPacket): boolean;
+    static hidePassword(password: string): string;
+    static debugPrint(color?: 'success' | 'info' | 'error' | 'warning' | 'none', ...data: any[]): void;
 }
