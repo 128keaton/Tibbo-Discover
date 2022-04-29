@@ -51,7 +51,9 @@ test('#testLogin', () => {
     const fakeResponse = {key: 'tibbo123', message: 'ERR_SOCKET_DGRAM_NOT_RUNNING', success: false};
 
     return deviceServer.login('0.0.0.0', 'password').then(response => {
-        expect(response).toEqual(fakeResponse);
+        expect(response.key).toEqual(fakeResponse.key);
+        expect(response.message).toEqual(fakeResponse.message);
+        expect(response.success).toEqual(fakeResponse.success);
     });
 });
 

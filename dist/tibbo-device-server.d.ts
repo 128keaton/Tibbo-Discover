@@ -1,4 +1,5 @@
 import { TibboDeviceLoginResponse, TibboDeviceSetting, TibboDeviceUpdateSettingResponse } from "./tibbo-types";
+import { SocketAsPromised } from "dgram-as-promised";
 export declare class TibboDeviceServer {
     private activeSockets;
     private _debug;
@@ -6,7 +7,7 @@ export declare class TibboDeviceServer {
     get debug(): boolean;
     set debug(debug: boolean);
     constructor(debug?: boolean, key?: string);
-    login(ipAddress: string, password: string, key?: string, timeout?: number): Promise<TibboDeviceLoginResponse>;
+    login(ipAddress: string, password: string, key?: string, timeout?: number, passedSocket?: SocketAsPromised): Promise<TibboDeviceLoginResponse>;
     buzz(ipAddress: string, password: string, key?: string): Promise<{
         message?: any;
         data?: any;

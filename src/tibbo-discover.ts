@@ -21,6 +21,7 @@ export class TibboDiscover {
     set debug(debug: boolean) {
         this.debugPrint('info', 'Enabling debug printing...');
         this._debug = debug;
+        TibboHelpers.enableDebugPrinting = debug;
     }
 
     public scan(timeout: number = 5000): Promise<TibboDevice[]> {

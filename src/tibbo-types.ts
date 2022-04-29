@@ -1,3 +1,5 @@
+import {SocketAsPromised} from "dgram-as-promised";
+
 export interface TibboDevice {
     board: string;
     application: string;
@@ -9,6 +11,7 @@ export interface TibboDeviceLoginResponse {
     key: string
     success: boolean;
     message?: string;
+    socket?: SocketAsPromised;
 }
 
 export interface TibboDeviceSetting {

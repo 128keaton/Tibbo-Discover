@@ -23,6 +23,7 @@ class TibboDiscover {
     set debug(debug) {
         this.debugPrint('info', 'Enabling debug printing...');
         this._debug = debug;
+        tibbo_helpers_1.TibboHelpers.enableDebugPrinting = debug;
     }
     scan(timeout = 5000) {
         tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Scanning for Tibbo devices ');

@@ -25,13 +25,14 @@ class TibboDeviceServer {
     set debug(debug) {
         this.debugPrint('info', 'Enabling debug printing...');
         this._debug = debug;
+        tibbo_helpers_1.TibboHelpers.enableDebugPrinting = debug;
     }
-    login(ipAddress, password, key = this.key, timeout = 3000) {
-        const socket = dgram_as_promised_1.default.createSocket("udp4");
+    login(ipAddress, password, key = this.key, timeout = 3000, passedSocket) {
         const message = tibbo_helpers_1.TibboHelpers.loginMessage(password, key);
         const encodedMessage = buffer_1.Buffer.from(message);
         const abortController = new AbortController();
         const signal = abortController.signal;
+        const socket = (!!passedSocket ? passedSocket : dgram_as_promised_1.default.createSocket("udp4"));
         tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Logging into Tibbo at', ipAddress, 'with key', key, 'and password', tibbo_helpers_1.TibboHelpers.hidePassword(password), 'with timeout', timeout);
         tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Raw login message:', message);
         return new Promise((resolve) => {
@@ -46,9 +47,18 @@ class TibboDeviceServer {
                 if (!!packet) {
                     message = packet.msg.toString();
                 }
-                return tibbo_helpers_1.TibboHelpers.processLoginResponse(packet);
+                if (tibbo_helpers_1.TibboHelpers.isRejectResponse(packet)) {
+                    const retryMessage = tibbo_helpers_1.TibboHelpers.retryLoginMessage(password, key);
+                    const encodedRetryMessage = buffer_1.Buffer.from(retryMessage);
+                    tibbo_helpers_1.TibboHelpers.debugPrint('warning', `Initial login message rejected, retrying with ${retryMessage}`);
+                    return socket.send(encodedRetryMessage, 0, encodedRetryMessage.length, tibbo_shared_1.TIBBO_BROADCAST_PORT, ipAddress)
+                        .then(() => socket.recv())
+                        .then(packet => tibbo_helpers_1.TibboHelpers.processLoginResponse(packet));
+                }
+                else {
+                    return tibbo_helpers_1.TibboHelpers.processLoginResponse(packet);
+                }
             })
-                .then(response => socket.close().catch(() => response).then(() => response))
                 .then(response => ({
                 success: (response || false),
                 key,
@@ -57,7 +67,7 @@ class TibboDeviceServer {
                 .then(response => {
                 didResolve = true;
                 abortController.abort();
-                resolve(response);
+                resolve({ ...response, socket });
             });
         });
     }
@@ -95,6 +105,7 @@ class TibboDeviceServer {
     async updateSettings(settings, ipAddress, password) {
         const didAuth = await this.login(ipAddress, password);
         if (!didAuth.success) {
+            delete didAuth.socket;
             return didAuth;
         }
         tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Updating settings named on Tibbo at', ipAddress, 'and password', tibbo_helpers_1.TibboHelpers.hidePassword(password), 'with values', settings);
@@ -130,7 +141,7 @@ class TibboDeviceServer {
     }
     logout(ipAddress, password, key = this.key) {
         tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Logging out of Tibbo at', ipAddress, 'with key', key, 'and password', tibbo_helpers_1.TibboHelpers.hidePassword(password));
-        return this.sendSingleAuthMessage(ipAddress, password, key, tibbo_helpers_1.TibboHelpers.logoutMessage(key), true);
+        return this.sendSingleAuthMessage(ipAddress, password, key, tibbo_helpers_1.TibboHelpers.logoutMessage(key), true, 3000, false);
     }
     static handleTimeout(expectTimeout, resolver) {
         if (expectTimeout) {
@@ -150,35 +161,30 @@ class TibboDeviceServer {
     handleLoginResponse(result, encodedMessage, ipAddress, socket, resolver) {
         if (result.success) {
             tibbo_helpers_1.TibboHelpers.debugPrint('success', 'Processing login response', result.message, 'responding with', encodedMessage.toString('utf8'));
-            return socket.bind()
-                .then(() => this.appendSocket(socket))
-                .then(socket => socket.send(encodedMessage, 0, encodedMessage.length, tibbo_shared_1.TIBBO_BROADCAST_PORT, ipAddress))
-                .catch(() => resolver({ message: 'Could not send message' }));
+            return socket.send(encodedMessage, 0, encodedMessage.length, tibbo_shared_1.TIBBO_BROADCAST_PORT, ipAddress)
+                .catch((reason) => resolver({ message: `Could not send message: ${reason}` }));
         }
         else {
             TibboDeviceServer.handleDenied(resolver, result.message);
         }
     }
     setupLoginTimeout(resolver, key, signal, socket, timeout = 2000) {
-        (0, promises_1.setTimeout)(timeout, 'timeout', { signal })
-            .then(() => Promise.all([this.stop(), socket.close()])
-            .then(() => resolver({ key, message: 'ERR_TIMEOUT', success: false })))
+        (0, promises_1.setTimeout)(timeout, 'timeout', { signal }).then(() => Promise.all([this.stop(), socket.close()])
+            .then(() => resolver({ key, message: 'ERR_TIMEOUT', success: false, socket })))
             .catch((err) => {
             let errorCode = 'ERR_TIMEOUT';
             if (!!err && err.hasOwnProperty('code')) {
                 errorCode = err['code'];
             }
-            resolver({ key, message: errorCode, success: false });
+            resolver({ key, message: errorCode, success: false, socket });
         });
     }
     setupTimeout(resolver, signal, socket, timeout = 2000, expectTimeout = false) {
         (0, promises_1.setTimeout)(timeout, 'timeout', { signal })
-            .then(() => Promise.all([this.stop(), socket.close()])
-            .then(() => TibboDeviceServer.handleTimeout(expectTimeout, resolver)))
-            .catch(() => {
-        });
+            .then(() => Promise.all([this.stop(), socket.close()]).then(() => TibboDeviceServer.handleTimeout(expectTimeout, resolver)))
+            .catch(() => tibbo_helpers_1.TibboHelpers.debugPrint('warning', 'Abort error thrown, ignoring'));
     }
-    sendSingleAuthMessage(ipAddress, password, key, message, expectTimeout = false, timeout = 2000) {
+    sendSingleAuthMessage(ipAddress, password, key, message, expectTimeout = false, timeout = 2000, requireLogin = true) {
         const socket = dgram_as_promised_1.default.createSocket("udp4");
         const encodedMessage = buffer_1.Buffer.from(message);
         const abortController = new AbortController();
@@ -186,17 +192,27 @@ class TibboDeviceServer {
         tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Sending single authenticated message to IP', ipAddress, 'with password', tibbo_helpers_1.TibboHelpers.hidePassword(password), 'and key', key, 'with message contents:', message);
         return new Promise(resolve => {
             this.setupTimeout(resolve, signal, socket, timeout, expectTimeout);
-            this.login(ipAddress, password, key, timeout)
-                .then(result => this.handleLoginResponse(result, encodedMessage, ipAddress, socket, resolve))
-                .then(() => socket.recv())
-                .then(packet => TibboDeviceServer.handleGenericPacket(abortController, packet))
-                .then(response => {
-                if (message !== tibbo_helpers_1.TibboHelpers.logoutMessage(key) && response.data !== undefined) {
-                    return this.logout(ipAddress, password, key).then(() => response);
-                }
-                return response;
-            })
-                .then(response => this.stop().then(() => resolve(response)));
+            const afterLoginChain = () => {
+                return socket.recv()
+                    .then(packet => TibboDeviceServer.handleGenericPacket(abortController, packet))
+                    .then(response => {
+                    if (message !== tibbo_helpers_1.TibboHelpers.logoutMessage(key) && response.data !== undefined) {
+                        return this.logout(ipAddress, password, key).then(() => response);
+                    }
+                    return response;
+                })
+                    .then(response => this.stop().then(() => resolve(response)));
+            };
+            if (requireLogin) {
+                this.login(ipAddress, password, key, timeout, socket)
+                    .then(result => this.handleLoginResponse(result, encodedMessage, ipAddress, socket, resolve))
+                    .then(() => afterLoginChain());
+            }
+            else {
+                this.appendSocket(socket);
+                this.handleLoginResponse({ success: true, key, socket }, encodedMessage, ipAddress, socket, resolve)
+                    .then(() => afterLoginChain());
+            }
         });
     }
     debugPrint(color = 'none', ...data) {
@@ -240,7 +256,10 @@ if (require.main == module) {
         .action((ipAddress, password) => {
         tibboDeviceServer.debug = commander_1.program.opts()['debug'];
         tibboDeviceServer.login(ipAddress, password)
-            .then(result => tibboDeviceServer.stop().then(() => result))
+            .then(result => tibboDeviceServer.stop().then(() => {
+            delete result.socket;
+            return result;
+        }))
             .then(result => console.log(JSON.stringify(result, null, 2)));
     });
     commander_1.program
@@ -274,7 +293,6 @@ if (require.main == module) {
         .action((ipAddress, password, raw) => {
         tibboDeviceServer.debug = commander_1.program.opts()['debug'];
         tibboDeviceServer.raw(ipAddress, password, raw)
-            .then(result => tibboDeviceServer.stop().then(() => result))
             .then(result => console.log(JSON.stringify(result, null, 2)));
     });
     const setting = commander_1.program.command('setting');

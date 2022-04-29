@@ -17,6 +17,7 @@ const BUZZ_BIT = 'B';
 const REBOOT_BIT = 'E';
 const INIT_BIT = 'I';
 const LOGIN_BIT = 'L';
+const RETRY_LOGIN_BIT = 'R';
 const LOGOUT_BIT = 'O';
 const UPDATE_SETTING_BIT = 'S';
 const READ_SETTING_BIT = 'G';
@@ -53,6 +54,14 @@ class TibboHelpers {
             rawMessage[0] !== REJECT_BIT &&
             rawMessage[0] !== FAIL_BIT &&
             rawMessage[0] !== ERR_BIT;
+    }
+    static isRejectResponse(packet) {
+        if (!packet) {
+            return null;
+        }
+        const rawMessage = packet.msg.toString();
+        TibboHelpers.debugPrint('info', `isRejectResponse: ${rawMessage}`);
+        return rawMessage[0] === REJECT_BIT;
     }
     static processSettingResponse(packet) {
         if (!packet) {
@@ -94,6 +103,9 @@ class TibboHelpers {
     static loginMessage(password, key) {
         return `${LOGIN_BIT}${password}${DELIMIT_BIT}${key}`;
     }
+    static retryLoginMessage(password, key) {
+        return `${RETRY_LOGIN_BIT}${password}${DELIMIT_BIT}${key}`;
+    }
     static getMacAddress(buffer) {
         const message = buffer.toString();
         const matches = message.match(MAC_REGEX);
@@ -120,32 +132,39 @@ class TibboHelpers {
             return false;
         }
         const message = packet.msg.toString();
-        return message === `${DENY_BIT}${DELIMIT_BIT}` || message === DENY_BIT;
+        return message[0] === DENY_BIT;
     }
     static hidePassword(password) {
-        const length = (password.length > 4 ? 4 : ((password.length - 2)));
-        return password.slice(0, -(length)).replace(/./g, '*') + password.slice(-(length));
+        if (password.length > 1) {
+            const halfSize = (password.length / 2);
+            const sliceLength = password.length - halfSize;
+            return password.slice(0, sliceLength).replace(/./g, '*') + password.slice(sliceLength);
+        }
+        return '*';
     }
     static debugPrint(color = 'none', ...data) {
-        const log = console.log;
-        const logData = chalk_1.default.magenta('[Tibbo Discover] - ') + data.join(' ');
-        switch (color) {
-            case 'success':
-                log(chalk_1.default.green(logData));
-                break;
-            case 'info':
-                log(chalk_1.default.cyanBright(logData));
-                break;
-            case 'error':
-                log(chalk_1.default.redBright(logData));
-                break;
-            case 'warning':
-                log(chalk_1.default.yellowBright(logData));
-                break;
-            case "none":
-                log(data);
-                break;
+        if (this.enableDebugPrinting) {
+            const log = console.log;
+            const logData = chalk_1.default.magenta('[Tibbo Discover] - ') + data.join(' ');
+            switch (color) {
+                case 'success':
+                    log(chalk_1.default.green(logData));
+                    break;
+                case 'info':
+                    log(chalk_1.default.cyanBright(logData));
+                    break;
+                case 'error':
+                    log(chalk_1.default.redBright(logData));
+                    break;
+                case 'warning':
+                    log(chalk_1.default.yellowBright(logData));
+                    break;
+                case "none":
+                    log(data);
+                    break;
+            }
         }
     }
 }
 exports.TibboHelpers = TibboHelpers;
+TibboHelpers.enableDebugPrinting = false;
