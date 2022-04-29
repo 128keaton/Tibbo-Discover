@@ -1,5 +1,4 @@
 import {TibboDiscover} from "../dist";
-import {TibboDeviceServer} from "../src";
 
 
 test('#testInstances', () => {

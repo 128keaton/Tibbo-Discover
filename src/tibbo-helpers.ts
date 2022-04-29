@@ -16,6 +16,7 @@ const BUZZ_BIT = 'B';
 const REBOOT_BIT = 'E';
 const INIT_BIT = 'I';
 const LOGIN_BIT = 'L';
+const LOGOUT_BIT = 'O';
 const UPDATE_SETTING_BIT = 'S';
 const READ_SETTING_BIT = 'G';
 
@@ -55,6 +56,8 @@ export class TibboHelpers {
         }
 
         const rawMessage = packet.msg.toString();
+
+        TibboHelpers.debugPrint('info', `Raw login response: ${rawMessage}`);
 
         return rawMessage[0] !== DENY_BIT &&
             rawMessage[0] !== REJECT_BIT &&
@@ -100,6 +103,10 @@ export class TibboHelpers {
 
     public static buzzMessage(key: string): string {
         return `${BUZZ_BIT}${DELIMIT_BIT}${key}`;
+    }
+
+    public static logoutMessage(key: string): string {
+        return `${LOGOUT_BIT}${DELIMIT_BIT}${key}`;
     }
 
     public static updateSettingMessage(setting: string, value: string, key: string): string {

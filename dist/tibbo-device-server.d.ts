@@ -27,6 +27,7 @@ export declare class TibboDeviceServer {
     updateSetting(setting: string, value: string, ipAddress: string, password: string): Promise<TibboDeviceUpdateSettingResponse[] | TibboDeviceLoginResponse>;
     updateSettings(settings: TibboDeviceSetting[], ipAddress: string, password: string): Promise<TibboDeviceUpdateSettingResponse[] | TibboDeviceLoginResponse>;
     stop(): Promise<void>;
+    private logout;
     private static handleTimeout;
     private appendSocket;
     private handleLoginResponse;

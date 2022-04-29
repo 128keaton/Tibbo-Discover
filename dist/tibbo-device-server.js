@@ -36,16 +36,23 @@ class TibboDeviceServer {
         tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Raw login message:', message);
         return new Promise((resolve) => {
             let didResolve = false;
+            let message;
             this.setupLoginTimeout(resolve, key, signal, socket, timeout);
             socket.bind()
                 .then(() => this.appendSocket(socket, true))
                 .then(socket => socket.send(encodedMessage, 0, encodedMessage.length, tibbo_shared_1.TIBBO_BROADCAST_PORT, ipAddress))
                 .then(() => socket.recv())
-                .then(packet => tibbo_helpers_1.TibboHelpers.processLoginResponse(packet))
+                .then(packet => {
+                if (!!packet) {
+                    message = packet.msg.toString();
+                }
+                return tibbo_helpers_1.TibboHelpers.processLoginResponse(packet);
+            })
                 .then(response => socket.close().catch(() => response).then(() => response))
                 .then(response => ({
                 success: (response || false),
                 key,
+                message
             }))
                 .then(response => {
                 didResolve = true;
@@ -102,7 +109,7 @@ class TibboDeviceServer {
                 success: result,
                 setting: settings[index]
             }));
-        }).then(results => socket.close().then(() => results));
+        }).then(results => socket.close().then(() => this.logout(ipAddress, password, didAuth.key)).then(() => results));
     }
     stop() {
         if (this.activeSockets.length === 0) {
@@ -120,6 +127,10 @@ class TibboDeviceServer {
             tibbo_helpers_1.TibboHelpers.debugPrint('error', 'Error caught on closing sockets:', err);
             return finished();
         });
+    }
+    logout(ipAddress, password, key = this.key) {
+        tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Logging out of Tibbo at', ipAddress, 'with key', key, 'and password', tibbo_helpers_1.TibboHelpers.hidePassword(password));
+        return this.sendSingleAuthMessage(ipAddress, password, key, tibbo_helpers_1.TibboHelpers.logoutMessage(key), true);
     }
     static handleTimeout(expectTimeout, resolver) {
         if (expectTimeout) {
@@ -145,7 +156,7 @@ class TibboDeviceServer {
                 .catch(() => resolver({ message: 'Could not send message' }));
         }
         else {
-            TibboDeviceServer.handleDenied(resolver);
+            TibboDeviceServer.handleDenied(resolver, result.message);
         }
     }
     setupLoginTimeout(resolver, key, signal, socket, timeout = 2000) {
@@ -179,6 +190,12 @@ class TibboDeviceServer {
                 .then(result => this.handleLoginResponse(result, encodedMessage, ipAddress, socket, resolve))
                 .then(() => socket.recv())
                 .then(packet => TibboDeviceServer.handleGenericPacket(abortController, packet))
+                .then(response => {
+                if (message !== tibbo_helpers_1.TibboHelpers.logoutMessage(key) && response.data !== undefined) {
+                    return this.logout(ipAddress, password, key).then(() => response);
+                }
+                return response;
+            })
                 .then(response => this.stop().then(() => resolve(response)));
         });
     }
@@ -201,9 +218,9 @@ class TibboDeviceServer {
         }
         return { message: 'SUCCESS', data };
     }
-    static handleDenied(resolver) {
+    static handleDenied(resolver, message) {
         tibbo_helpers_1.TibboHelpers.debugPrint('error', 'Access denied from handleDenied');
-        resolver({ message: 'ACCESS_DENIED' });
+        resolver({ message: (!!message ? message : 'ACCESS_DENIED'), success: false });
     }
 }
 exports.TibboDeviceServer = TibboDeviceServer;

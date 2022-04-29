@@ -11,6 +11,7 @@ test('#testInstances', () => {
     expect(TibboHelpers.initializeSettingsMessage).toBeInstanceOf(Function);
     expect(TibboHelpers.updateSettingMessage).toBeInstanceOf(Function);
     expect(TibboHelpers.loginMessage).toBeInstanceOf(Function);
+    expect(TibboHelpers.logoutMessage).toBeInstanceOf(Function);
     expect(TibboHelpers.getMacAddress).toBeInstanceOf(Function);
     expect(TibboHelpers.iterateSend).toBeInstanceOf(Function);
     expect(TibboHelpers.debugPrint).toBeInstanceOf(Function);
@@ -92,6 +93,14 @@ test('#testLoginMessage', () => {
     const valid = `L${password}|${key}`
 
     expect(TibboHelpers.loginMessage(password, key)).toEqual(valid);
+});
+
+test('#testLogoutMessage', () => {
+    const key = 'tibbo123';
+
+    const valid = `O|${key}`
+
+    expect(TibboHelpers.logoutMessage(key)).toEqual(valid);
 });
 
 test('#testRebootMessage', () => {

@@ -13,6 +13,7 @@ export declare class TibboHelpers {
     static getSettingMessage(setting: string, key: string): string;
     static initializeSettingsMessage(key: string): string;
     static buzzMessage(key: string): string;
+    static logoutMessage(key: string): string;
     static updateSettingMessage(setting: string, value: string, key: string): string;
     static loginMessage(password: string, key: string): string;
     static getMacAddress(buffer: Buffer): string | null;

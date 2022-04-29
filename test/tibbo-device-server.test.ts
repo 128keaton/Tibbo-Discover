@@ -16,6 +16,9 @@ test('#testInstances', () => {
     expect(deviceServer.updateSettings).toBeInstanceOf(Function);
 
     // @ts-ignore
+    expect(deviceServer.logout).toBeInstanceOf(Function);
+
+    // @ts-ignore
     expect(deviceServer.sendSingleAuthMessage).toBeInstanceOf(Function);
 
     // @ts-ignore
