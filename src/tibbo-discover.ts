@@ -24,9 +24,9 @@ export class TibboDiscover {
         TibboHelpers.enableDebugPrinting = debug;
     }
 
-    public scan(timeout: number = 5000): Promise<TibboDevice[]> {
+    public scan(timeout: number = 5000, networkInterface?: string): Promise<TibboDevice[]> {
         TibboHelpers.debugPrint('info', 'Scanning for Tibbo devices ');
-        return this.sendBroadcastMessage(TibboHelpers.discoverMessage).then(() => {
+        return this.sendBroadcastMessage(TibboHelpers.discoverMessage, networkInterface).then(() => {
             return new Promise(resolve => {
                 setTimeout(timeout).then(() => {
                     this.stop().then(devices => resolve(devices))
@@ -35,12 +35,12 @@ export class TibboDiscover {
         })
     }
 
-    public query(id: string, timeout: number = 1500): Promise<TibboDevice | null> {
+    public query(id: string, timeout: number = 1500, networkInterface?: string): Promise<TibboDevice | null> {
         TibboHelpers.debugPrint('success', 'Querying Tibbo with ID ', id);
         return new Promise<TibboDevice | null>(resolve => {
             let didResolve = false;
 
-            this.sendBroadcastMessage(TibboHelpers.queryMessage(id))
+            this.sendBroadcastMessage(TibboHelpers.queryMessage(id), networkInterface)
                 .then(socket => socket.recv())
                 .then(packet => TibboHelpers.processQueryResponse(id, packet))
                 .then(result => {
@@ -77,9 +77,14 @@ export class TibboDiscover {
             });
     }
 
-    private sendBroadcastMessage(message: string) {
+    private sendBroadcastMessage(message: string, networkInterface?: string) {
         const socket = DgramAsPromised.createSocket("udp4");
         const encodedMessage = Buffer.from(message);
+
+        if (!!networkInterface) {
+            TibboHelpers.debugPrint('info', 'Using interface "', networkInterface, '" for broadcasting');
+            socket.setMulticastInterface(networkInterface);
+        }
 
         TibboHelpers.debugPrint('info', 'Sending broadcast message', message, 'to', `${TIBBO_BROADCAST_ADDR}:${TIBBO_BROADCAST_PORT}`);
         return socket.bind().then(() => {
@@ -142,7 +147,8 @@ if (require.main == module) {
         .command('scan')
         .description('Scan for devices on the network')
         .addOption(new Option('-t, --timeout <delay>', 'timeout in milliseconds').default(4000, 'four seconds'))
-        .action((strTimeout) => {
+        .addOption(new Option('-i, --interface <network interface>', 'i.e. eth0').default(undefined, 'whichever NodeJS picks first :P'))
+        .action((strTimeout, networkInterface) => {
             tibboDiscover.debug = program.opts()['debug'];
             let timeout: undefined | number = Number(strTimeout);
 
@@ -150,7 +156,7 @@ if (require.main == module) {
                 timeout = undefined;
             }
 
-            return tibboDiscover.scan(timeout)
+            return tibboDiscover.scan(timeout, networkInterface)
                 .then(result => tibboDiscover.stop().then(() => result))
                 .then(result => console.log(JSON.stringify(result, null, 2)));
         });
