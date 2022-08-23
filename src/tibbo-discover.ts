@@ -83,11 +83,7 @@ export class TibboDiscover {
 
         if (!!networkInterface) {
             TibboHelpers.debugPrint('info', 'Using interface "', networkInterface, '" for broadcasting');
-          try {
-              socket.setMulticastInterface(networkInterface);
-          } catch (error) {
-              throw new Error('Invalid interface');
-          }
+            socket.setMulticastInterface(networkInterface);
         }
 
         TibboHelpers.debugPrint('info', 'Sending broadcast message', message, 'to', `${TIBBO_BROADCAST_ADDR}:${TIBBO_BROADCAST_PORT}`);
