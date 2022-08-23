@@ -35,12 +35,12 @@ export class TibboDiscover {
         })
     }
 
-    public query(id: string, timeout: number = 1500, networkInterface?: string): Promise<TibboDevice | null> {
+    public query(id: string, timeout: number = 1500, address?: string): Promise<TibboDevice | null> {
         TibboHelpers.debugPrint('success', 'Querying Tibbo with ID ', id);
         return new Promise<TibboDevice | null>(resolve => {
             let didResolve = false;
 
-            this.sendBroadcastMessage(TibboHelpers.queryMessage(id), networkInterface)
+            this.sendBroadcastMessage(TibboHelpers.queryMessage(id), address)
                 .then(socket => socket.recv())
                 .then(packet => TibboHelpers.processQueryResponse(id, packet))
                 .then(result => {
@@ -77,20 +77,20 @@ export class TibboDiscover {
             });
     }
 
-    private sendBroadcastMessage(message: string, networkInterface?: string) {
+    private sendBroadcastMessage(message: string, address?: string) {
         const socket = DgramAsPromised.createSocket("udp4");
         const encodedMessage = Buffer.from(message);
 
 
         TibboHelpers.debugPrint('info', 'Sending broadcast message', message, 'to', `${TIBBO_BROADCAST_ADDR}:${TIBBO_BROADCAST_PORT}`);
         return socket.bind({
-            address: networkInterface||'127.0.0.1',
+            address,
         }).then(() => {
             this.activeSockets.push(socket);
 
-            if (!!networkInterface) {
-                TibboHelpers.debugPrint('info', 'Using interface "', networkInterface, '" for broadcasting');
-                socket.setMulticastInterface(networkInterface);
+            if (!!address) {
+                TibboHelpers.debugPrint('info', 'Using address', address, 'for broadcasting');
+                socket.setMulticastInterface(address);
             }
 
             socket.setBroadcast(true);
@@ -100,7 +100,7 @@ export class TibboDiscover {
 
                 if (!!tibboID && !this.devices[tibboID]) {
                     TibboHelpers.debugPrint('success', 'New Tibbo found, ID =', tibboID);
-                    return this.query(tibboID).then(result => {
+                    return this.query(tibboID, 5000, address).then(result => {
                         if (!!result)
                             this.devices[tibboID] = result;
                     })
@@ -150,12 +150,12 @@ if (require.main == module) {
         .command('scan')
         .description('Scan for devices on the network')
         .addOption(new Option('-t, --timeout <delay>', 'timeout in milliseconds').default(4000, 'four seconds'))
-        .addOption(new Option('-i, --networkInterface <network interface>', 'i.e. eth0'))
+        .addOption(new Option('-a, --address <address>', 'Defaults to current address'))
         .action((opts) => {
             tibboDiscover.debug = program.opts()['debug'];
-            const options: {timeout: number|undefined, networkInterface: string|undefined} = opts || {};
+            const options: {timeout: number|undefined, address: string|undefined} = opts || {};
 
-            return tibboDiscover.scan(options.timeout, options.networkInterface)
+            return tibboDiscover.scan(options.timeout, options.address)
                 .then(result => tibboDiscover.stop().then(() => result))
                 .then(result => console.log(JSON.stringify(result, null, 2)));
         });
