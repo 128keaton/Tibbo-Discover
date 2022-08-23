@@ -75,7 +75,12 @@ class TibboDiscover {
         const encodedMessage = buffer_1.Buffer.from(message);
         if (!!networkInterface) {
             tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Using interface "', networkInterface, '" for broadcasting');
-            socket.setMulticastInterface(networkInterface);
+            try {
+                socket.setMulticastInterface(networkInterface);
+            }
+            catch (error) {
+                throw new Error('Invalid interface');
+            }
         }
         tibbo_helpers_1.TibboHelpers.debugPrint('info', 'Sending broadcast message', message, 'to', `${tibbo_shared_1.TIBBO_BROADCAST_ADDR}:${tibbo_shared_1.TIBBO_BROADCAST_PORT}`);
         return socket.bind().then(() => {
@@ -128,14 +133,11 @@ if (require.main == module) {
         .command('scan')
         .description('Scan for devices on the network')
         .addOption(new commander_1.Option('-t, --timeout <delay>', 'timeout in milliseconds').default(4000, 'four seconds'))
-        .addOption(new commander_1.Option('-i, --interface <network interface>', 'i.e. eth0').default(undefined, 'whichever NodeJS picks first :P'))
-        .action((strTimeout, networkInterface) => {
+        .addOption(new commander_1.Option('-i, --networkInterface <network interface>', 'i.e. eth0'))
+        .action((opts) => {
         tibboDiscover.debug = commander_1.program.opts()['debug'];
-        let timeout = Number(strTimeout);
-        if (isNaN(timeout)) {
-            timeout = undefined;
-        }
-        return tibboDiscover.scan(timeout, networkInterface)
+        const options = opts || {};
+        return tibboDiscover.scan(options.timeout, options.networkInterface)
             .then(result => tibboDiscover.stop().then(() => result))
             .then(result => console.log(JSON.stringify(result, null, 2)));
     });
