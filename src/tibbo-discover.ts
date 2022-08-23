@@ -83,7 +83,9 @@ export class TibboDiscover {
 
 
         TibboHelpers.debugPrint('info', 'Sending broadcast message', message, 'to', `${TIBBO_BROADCAST_ADDR}:${TIBBO_BROADCAST_PORT}`);
-        return socket.bind().then(() => {
+        return socket.bind({
+            address: networkInterface||'127.0.0.1',
+        }).then(() => {
             this.activeSockets.push(socket);
 
             if (!!networkInterface) {
