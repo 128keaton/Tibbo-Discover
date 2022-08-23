@@ -81,14 +81,15 @@ export class TibboDiscover {
         const socket = DgramAsPromised.createSocket("udp4");
         const encodedMessage = Buffer.from(message);
 
-        if (!!networkInterface) {
-            TibboHelpers.debugPrint('info', 'Using interface "', networkInterface, '" for broadcasting');
-            socket.setMulticastInterface(networkInterface);
-        }
 
         TibboHelpers.debugPrint('info', 'Sending broadcast message', message, 'to', `${TIBBO_BROADCAST_ADDR}:${TIBBO_BROADCAST_PORT}`);
         return socket.bind().then(() => {
             this.activeSockets.push(socket);
+
+            if (!!networkInterface) {
+                TibboHelpers.debugPrint('info', 'Using interface "', networkInterface, '" for broadcasting');
+                socket.setMulticastInterface(networkInterface);
+            }
 
             socket.setBroadcast(true);
 
