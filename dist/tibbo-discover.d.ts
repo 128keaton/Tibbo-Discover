@@ -6,8 +6,8 @@ export declare class TibboDiscover {
     private _debug;
     get debug(): boolean;
     set debug(debug: boolean);
-    scan(timeout?: number): Promise<TibboDevice[]>;
-    query(id: string, timeout?: number): Promise<TibboDevice | null>;
+    scan(timeout?: number, networkInterface?: string): Promise<TibboDevice[]>;
+    query(id: string, timeout?: number, networkInterface?: string): Promise<TibboDevice | null>;
     stop(): Promise<TibboDevice[]>;
     private sendBroadcastMessage;
     private debugPrint;
